@@ -8,13 +8,13 @@ import 'normal_shock.dart';
 class _C {
   static const headerBg = Color(0xFF18397C);
   static const labelSmall = Color(0xFF6B7280);
-  static const drawerBg = Color(0xFFF4F6FB);           // light blue-grey bg
-  static const drawerActiveBg = Color(0xFF18397C);     // navy — active pill
+  static const drawerBg = Color(0xFFF4F6FB); // light blue-grey bg
+  static const drawerActiveBg = Color(0xFF18397C); // navy — active pill
   static const drawerActiveText = Colors.white;
   static const drawerInactiveText = Color(0xFF374151); // dark grey — readable
-  static const drawerDivider = Color(0xFFD1D9EC);      // soft blue-grey line
-  static const drawerHeaderText = Color(0xFF0D1F3C);   // near-black header
-  static const drawerItemBg = Color(0xFFE8EDF7);       // pale blue inactive pill
+  static const drawerDivider = Color(0xFFD1D9EC); // soft blue-grey line
+  static const drawerHeaderText = Color(0xFF0D1F3C); // near-black header
+  static const drawerItemBg = Color(0xFFE8EDF7); // pale blue inactive pill
 }
 
 // ─────────────────────────────────────────────
@@ -110,18 +110,11 @@ class _AppDrawer extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
               child: Row(
                 children: [
-                  Container(
+                  Image.asset(
+                    'lib/images/cftk.png',
                     width: 38,
                     height: 38,
-                    decoration: BoxDecoration(
-                      color: _C.drawerActiveBg,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.compress,
-                      color: Colors.white,
-                      size: 20,
-                    ),
+                    fit: BoxFit.contain,
                   ),
                   const SizedBox(width: 12),
                   const Text(

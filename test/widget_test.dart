@@ -8,7 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cftk/standard_atm.dart';
+import 'package:cftk/pages/standard_atm.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {

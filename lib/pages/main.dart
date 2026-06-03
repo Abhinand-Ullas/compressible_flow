@@ -1,6 +1,8 @@
+import 'package:device_preview/device_preview.dart';
 import 'package:flutter/material.dart';
 import 'isentropic_flow.dart';
 import 'normal_shock.dart';
+import '../utils/responsive.dart';
 
 // ─────────────────────────────────────────────
 //  Colour tokens
@@ -98,30 +100,36 @@ class _AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    
     return Drawer(
       backgroundColor: _C.drawerBg,
-      width: 272,
+      width: Responsive.wp(context, 272),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ──────────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+              padding: EdgeInsets.fromLTRB(
+                Responsive.pad(context, 20),
+                Responsive.pad(context, 24),
+                Responsive.pad(context, 20),
+                Responsive.pad(context, 8),
+              ),
               child: Row(
                 children: [
                   Image.asset(
                     'lib/images/cftk.png',
-                    width: 38,
-                    height: 38,
+                    width: Responsive.wp(context, 38),
+                    height: Responsive.wp(context, 38),
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
+                  SizedBox(width: Responsive.wp(context, 12)),
+                  Text(
                     'Compressible Flow\nToolkit',
                     style: TextStyle(
                       color: _C.drawerHeaderText,
-                      fontSize: 13.5,
+                      fontSize: Responsive.sp(context, 13.5),
                       fontWeight: FontWeight.w600,
                       height: 1.4,
                       letterSpacing: 0.2,
@@ -131,21 +139,26 @@ class _AppDrawer extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 12),
+            SizedBox(height: Responsive.hp(context, 12)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 16)),
               child: Container(height: 0.5, color: _C.drawerDivider),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: Responsive.hp(context, 12)),
 
             // ── Section label ────────────────────────────────────────────────
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                Responsive.pad(context, 20),
+                0,
+                Responsive.pad(context, 20),
+                Responsive.pad(context, 8),
+              ),
               child: Text(
                 'FLOW TYPES',
                 style: TextStyle(
                   color: _C.labelSmall,
-                  fontSize: 10.5,
+                  fontSize: Responsive.sp(context, 10.5),
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1.2,
                 ),
@@ -182,15 +195,24 @@ class _DrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.fromLTRB(12, 3, 12, 3),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        margin: EdgeInsets.fromLTRB(
+          Responsive.pad(context, 12),
+          Responsive.pad(context, 3),
+          Responsive.pad(context, 12),
+          Responsive.pad(context, 3),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: Responsive.pad(context, 16),
+          vertical: Responsive.pad(context, 13),
+        ),
         decoration: BoxDecoration(
           color: isActive ? _C.drawerActiveBg : _C.drawerItemBg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
         ),
         child: Row(
           children: [
@@ -198,7 +220,7 @@ class _DrawerItem extends StatelessWidget {
               child: Text(
                 page.title,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: Responsive.sp(context, 14),
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                   color: isActive ? _C.drawerActiveText : _C.drawerInactiveText,
                 ),
@@ -206,8 +228,8 @@ class _DrawerItem extends StatelessWidget {
             ),
             if (isActive)
               Container(
-                width: 6,
-                height: 6,
+                width: Responsive.wp(context, 6),
+                height: Responsive.wp(context, 6),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -224,7 +246,12 @@ class _DrawerItem extends StatelessWidget {
 //  Entry point
 // ─────────────────────────────────────────────
 void main() {
-  runApp(const _App());
+  runApp(
+    DevicePreview(
+      enabled: true,
+      builder: (context) => const _App(),
+    ),
+  );
 }
 
 class _App extends StatelessWidget {
@@ -234,6 +261,8 @@ class _App extends StatelessWidget {
     return MaterialApp(
       title: 'Compressible Flow Toolkit',
       debugShowCheckedModeBanner: false,
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0D1F3C)),
         useMaterial3: true,

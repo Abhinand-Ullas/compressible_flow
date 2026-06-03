@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/dialogs.dart';
+import '../utils/responsive.dart';
 
 // ─────────────────────────────────────────────
 //  Colour tokens  (same palette as Isentropic page)
@@ -950,7 +951,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   // ─────────────────────────────────────────────
   //  Reset all
   // ─────────────────────────────────────────────
-  void _resetAll() {
+ /* void _resetAll() {
     setState(() {
       _activeField = _NSField.none;
       _result = null;
@@ -966,13 +967,14 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _p02p1Ctrl.clear();
     _delvA1Ctrl.clear();
     _updating = false;
-  }
+  } */
 
   // ─────────────────────────────────────────────
   //  BUILD
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    
     return GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Column(
@@ -980,15 +982,20 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             _buildAppBar(context),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                padding: EdgeInsets.fromLTRB(
+                  Responsive.pad(context, 14),
+                  Responsive.pad(context, 10),
+                  Responsive.pad(context, 14),
+                  Responsive.pad(context, 24),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // _buildDescription(),  // moved to info section
-                    // const SizedBox(height: 14),
-                    _buildGammaCard(),
-                    const SizedBox(height: 10),
-                    _buildFieldsCard(),
+                    // SizedBox(height: Responsive.hp(context, 14)),
+                    _buildGammaCard(context),
+                    SizedBox(height: Responsive.hp(context, 10)),
+                    _buildFieldsCard(context),
                     // const SizedBox(height: 12),
                     // _buildNoteCard(),  // moved to info section
                   ],
@@ -1002,43 +1009,49 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
   // ── App Bar ───────────────────────────────────────────────────────────────
   Widget _buildAppBar(BuildContext context) {
+    
     return Container(
       color: _C.headerBg,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 13),
+          padding: EdgeInsets.fromLTRB(
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 13),
+          ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white, size: 22),
-                onPressed: widget.onDrawer ?? () {} // wire to nav drawer
+                icon: Icon(Icons.menu, color: Colors.white, size: Responsive.sp(context, 22)),
+                onPressed: widget.onDrawer ?? () {}
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Normal Shock',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 15,
+                    fontSize: Responsive.sp(context, 15),
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.1,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.tips_and_updates_outlined,
                   color: Colors.yellow,
-                  size: 22,
+                  size: Responsive.sp(context, 22),
                 ),
                 onPressed: () => _showFeaturesDialog(context),
               ),
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.info_outline,
                   color: Colors.white,
-                  size: 22,
+                  size: Responsive.sp(context, 22),
                 ),
                 onPressed: () => _showInfoDialog(context),
               ),
@@ -1049,25 +1062,20 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     );
   }
 
-  // ── Description ── (commented out; moved to info section)
-  /*
-  Widget _buildDescription() {
-    return const Text(
-      'Enter any one flow parameter to instantly compute all remaining '
-      'normal shock properties. Tap a ratio label (T₂/T₁, P₂/P₁ …) to '
-      'convert between pre-shock and post-shock absolute values.',
-      style: TextStyle(fontSize: 12, color: _C.descText, height: 1.55),
-    );
-  }
-  */
-
   // ── Gamma card ────────────────────────────────────────────────────────────
-  Widget _buildGammaCard() {
+  Widget _buildGammaCard(BuildContext context) {
+    
     return _Card(
-      header: _cardHeader(Icons.tune, 'SPECIFIC HEAT RATIO  γ'),
+      context: context,
+      header: _cardHeader(context, Icons.tune, 'SPECIFIC HEAT RATIO  γ'),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          padding: EdgeInsets.fromLTRB(
+            Responsive.pad(context, 14),
+            Responsive.pad(context, 10),
+            Responsive.pad(context, 14),
+            Responsive.pad(context, 10),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1075,6 +1083,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                 children: [
                   Expanded(
                     child: _buildInputField(
+                      context: context,
                       controller: _gammaCtrl,
                       focusNode: _gammaFocus,
                       hintText: 'Must be greater than 1 (e.g. 1.4)',
@@ -1082,8 +1091,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                       hasError: !_gammaValid,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: Responsive.wp(context, 8)),
                   _GasDropdownButton(
+                    context: context,
                     selectedName: _selectedGasName,
                     onSelect: (gas) {
                       _updating = true;
@@ -1096,8 +1106,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                 ],
               ),
               if (_gammaError != null) ...[
-                const SizedBox(height: 4),
-                _errorText(_gammaError!),
+                SizedBox(height: Responsive.hp(context, 4)),
+                _errorText(context, _gammaError!),
               ],
             ],
           ),
@@ -1107,7 +1117,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   }
 
   // ── Fields card ────────────────────────────────────────────────────────────
-  Widget _buildFieldsCard() {
+  Widget _buildFieldsCard(BuildContext context) {
+    
     final r = _result;
     final bool hasResult = r != null;
 
@@ -1125,9 +1136,10 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     final p02p1Hint  = _inverseRatio ? 'Between 0 and 1' : 'Between 0 and P₀₂/P₁ max';
 
     return _Card(
+      context: context,
       header: Row(
         children: [
-          Expanded(child: _cardHeader(Icons.calculate_outlined, 'SHOCK PROPERTIES')),
+          Expanded(child: _cardHeader(context, Icons.calculate_outlined, 'SHOCK PROPERTIES')),
           GestureDetector(
             onTap: () {
               setState(() => _inverseRatio = !_inverseRatio);
@@ -1174,24 +1186,27 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.pad(context, 8),
+                vertical: Responsive.pad(context, 5),
+              ),
               decoration: BoxDecoration(
                 color: _inverseRatio ? _C.headerBg : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.swap_horiz,
-                    size: 14,
+                    size: Responsive.sp(context, 14),
                     color: _inverseRatio ? Colors.white : _C.labelMedium,
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: Responsive.wp(context, 4)),
                   Text(
                     'Reciprocal',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: Responsive.sp(context, 11),
                       fontWeight: FontWeight.w600,
                       color: _inverseRatio ? Colors.white : _C.labelMedium,
                     ),
@@ -1203,8 +1218,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         ],
       ),
       children: [
-        // ── M₁ ───────────────────────────────────────────────────────────────────
+        // ── M₁ ─────────────────────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.m1,
           label: 'Mach Number (before shock)',
           symbol: 'M₁',
@@ -1217,8 +1233,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         _divider(),
 
-        // ── M₂ ───────────────────────────────────────────────────────────────────
+        // ── M₂ ─────────────────────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.m2,
           label: 'Mach Number (after shock)',
           symbol: 'M₂',
@@ -1231,8 +1248,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         _divider(),
 
-        // ── T₂/T₁ ───────────────────────────────────────────────────────────
+        // ── T₂/T₁ ───────────────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.t2t1,
           label: 'Temperature Ratio',
           symbol: t2t1Sym,
@@ -1256,8 +1274,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         _divider(),
 
-        // ── P₂/P₁ ───────────────────────────────────────────────────────────
+        // ── P₂/P₁ ───────────────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.p2p1,
           label: 'Pressure Ratio',
           symbol: p2p1Sym,
@@ -1283,6 +1302,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         // ── ρ₂/ρ₁ ───────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.rho2rho1,
           label: 'Density Ratio',
           symbol: rhoSym,
@@ -1308,6 +1328,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         // ── P₀₂/P₀₁ ─────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.p02p01,
           label: 'Stagnation Pressure Ratio',
           symbol: p02p01Sym,
@@ -1333,6 +1354,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         // ── P₀₂/P₁ (or P₁/P₀₂) ─────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.p02p1,
           label: 'Pitot-to-Static Ratio',
           symbol: p02p1Sym,
@@ -1358,6 +1380,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
         // ── ΔV/a₁ ────────────────────────────────────────────────────────────
         _flowField(
+          context: context,
           field: _NSField.delvA1,
           label: 'Velocity Change Ratio',
           symbol: 'ΔV/a₁',
@@ -1410,23 +1433,24 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   //  Reusable sub-builders
   // ─────────────────────────────────────────────
 
-  Widget _cardHeader(IconData icon, String title) {
+  Widget _cardHeader(BuildContext context, IconData icon, String title) {
+    
     return Row(
       children: [
         Container(
-          width: 24,
-          height: 24,
+          width: Responsive.wp(context, 24),
+          height: Responsive.wp(context, 24),
           decoration: const BoxDecoration(
             color: _C.headerBg,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.white, size: 13),
+          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: Responsive.wp(context, 8)),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 13.5,
+          style: TextStyle(
+            fontSize: Responsive.sp(context, 13.5),
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -1440,6 +1464,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       const Divider(height: 0, thickness: 0.5, color: _C.rowDivider);
 
   Widget _flowField({
+    required BuildContext context,
     required _NSField field,
     required String label,
     required String symbol,
@@ -1452,12 +1477,18 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     Widget? trailing,
     bool isLast = false,
   }) {
+    
     final isActive = _activeField == field;
     final isComputed =
         _activeField != _NSField.none && !isActive && _result != null;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(14, 8, 14, isLast ? 10 : 0),
+      padding: EdgeInsets.fromLTRB(
+        Responsive.pad(context, 14),
+        Responsive.pad(context, 8),
+        Responsive.pad(context, 14),
+        isLast ? Responsive.pad(context, 10) : 0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1468,17 +1499,17 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
-                        fontSize: 13,
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 13),
                         fontWeight: FontWeight.w500,
                         color: _C.fieldLabel,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: Responsive.wp(context, 4)),
                     Text(
                       symbol,
-                      style: const TextStyle(
-                        fontSize: 13,
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 13),
                         fontWeight: FontWeight.w700,
                         fontStyle: FontStyle.italic,
                         color: _C.fieldLabel,
@@ -1490,8 +1521,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
               if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: Responsive.hp(context, 5)),
           _buildInputField(
+            context: context,
             controller: controller,
             focusNode: focusNode,
             hintText: hintText,
@@ -1502,8 +1534,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             onHandyCalc: onHandyCalc,
           ),
           if (error != null) ...[
-            const SizedBox(height: 4),
-            _errorText(error),
+            SizedBox(height: Responsive.hp(context, 4)),
+            _errorText(context, error),
           ],
         ],
       ),
@@ -1511,6 +1543,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   }
 
   Widget _buildInputField({
+    required BuildContext context,
     Key? key,
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -1521,6 +1554,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     bool isActive = false,
     VoidCallback? onHandyCalc,
   }) {
+    
     return ListenableBuilder(
       listenable: focusNode,
       builder: (_, __) {
@@ -1546,28 +1580,28 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
           suffix = GestureDetector(
             onTap: onHandyCalc,
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 10)),
               child: Icon(
                 Icons.compare_arrows_rounded,
-                size: 18,
+                size: Responsive.sp(context, 18),
                 color: _C.headerBg,
               ),
             ),
           );
         } else if (isComputed) {
-          suffix = const Padding(
-            padding: EdgeInsets.only(right: 10),
-            child: Icon(Icons.lock_outline, size: 14, color: _C.labelSmall),
+          suffix = Padding(
+            padding: EdgeInsets.only(right: Responsive.pad(context, 10)),
+            child: Icon(Icons.lock_outline, size: Responsive.sp(context, 14), color: _C.labelSmall),
           );
         }
 
         return Container(
           key: key,
-          height: 46,
+          height: Responsive.hp(context, 46),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
             border: Border.all(color: borderColor, width: 1),
           ),
           child: TextField(
@@ -1584,27 +1618,27 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             autocorrect: false,
             enableSuggestions: false,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: Responsive.sp(context, 14),
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
               color: isComputed ? _C.outputValue : _C.textPrimary,
             ),
             decoration: InputDecoration(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 13,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: Responsive.pad(context, 12),
+                vertical: Responsive.pad(context, 13),
               ),
               border: InputBorder.none,
               hintText: hintText,
-              hintStyle: const TextStyle(
-                fontSize: 13,
+              hintStyle: TextStyle(
+                fontSize: Responsive.sp(context, 13),
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
               suffixIcon: suffix,
-              suffixIconConstraints: const BoxConstraints(
-                minWidth: 30,
-                minHeight: 30,
+              suffixIconConstraints: BoxConstraints(
+                minWidth: Responsive.wp(context, 30),
+                minHeight: Responsive.wp(context, 30),
               ),
             ),
           ),
@@ -1613,18 +1647,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     );
   }
 
-  Widget _errorText(String msg) => Row(
-    children: [
-      const Icon(Icons.error_outline, size: 13, color: _C.errorText),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Text(
-          msg,
-          style: const TextStyle(fontSize: 11, color: _C.errorText),
+  Widget _errorText(BuildContext context, String msg) {
+    
+    return Row(
+      children: [
+        Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
+        SizedBox(width: Responsive.wp(context, 4)),
+        Expanded(
+          child: Text(
+            msg,
+            style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   // ── Features dialog ───────────────────────────────────────────────────────
   void _showFeaturesDialog(BuildContext context) {
@@ -1651,39 +1688,42 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 // ─────────────────────────────────────────────
 class _GasDropdownButton extends StatelessWidget {
   const _GasDropdownButton({
+    required this.context,
     required this.onSelect,
     required this.selectedName,
   });
+  final BuildContext context;
   final ValueChanged<_GasEntry> onSelect;
   final String selectedName;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext ctx) {
+    
     return GestureDetector(
-      onTap: () => _showGasPicker(context),
+      onTap: () => _showGasPicker(ctx),
       child: Container(
-        height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: Responsive.hp(ctx, 46),
+        padding: EdgeInsets.symmetric(horizontal: Responsive.pad(ctx, 12)),
         decoration: BoxDecoration(
           color: _C.headerBg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(Responsive.wp(ctx, 8)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               selectedName,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 13,
+                fontSize: Responsive.sp(ctx, 13),
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(
+            SizedBox(width: Responsive.wp(ctx, 4)),
+            Icon(
               Icons.keyboard_arrow_down,
               color: Colors.white,
-              size: 16,
+              size: Responsive.sp(ctx, 16),
             ),
           ],
         ),
@@ -1691,9 +1731,10 @@ class _GasDropdownButton extends StatelessWidget {
     );
   }
 
-  void _showGasPicker(BuildContext context) {
+  void _showGasPicker(BuildContext ctx) {
+    
     showModalBottomSheet(
-      context: context,
+      context: ctx,
       backgroundColor: _C.pageBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1703,12 +1744,17 @@ class _GasDropdownButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                Responsive.pad(ctx, 20),
+                Responsive.pad(ctx, 16),
+                Responsive.pad(ctx, 20),
+                Responsive.pad(ctx, 12),
+              ),
               child: Text(
                 'Select Gas / Fluid',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: Responsive.sp(ctx, 14),
                   fontWeight: FontWeight.w600,
                   color: _C.headerBg,
                 ),
@@ -1716,21 +1762,26 @@ class _GasDropdownButton extends StatelessWidget {
             ),
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: EdgeInsets.fromLTRB(
+                  Responsive.pad(ctx, 16),
+                  0,
+                  Responsive.pad(ctx, 16),
+                  Responsive.pad(ctx, 12),
+                ),
                 child: Column(
                   children: _kGases
                       .where((g) => !g.gamma.isNaN)
                       .map(
                         (gas) => GestureDetector(
                           onTap: () {
-                            Navigator.pop(context);
+                            Navigator.pop(ctx);
                             onSelect(gas);
                           },
                           child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                            margin: EdgeInsets.only(bottom: Responsive.hp(ctx, 8)),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: Responsive.pad(ctx, 14),
+                              vertical: Responsive.pad(ctx, 12),
                             ),
                             decoration: BoxDecoration(
                               color: _C.cardBg,
@@ -1738,23 +1789,23 @@ class _GasDropdownButton extends StatelessWidget {
                                 color: _C.cardBorder,
                                 width: 1,
                               ),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(Responsive.wp(ctx, 8)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   gas.name,
-                                  style: const TextStyle(
-                                    fontSize: 14,
+                                  style: TextStyle(
+                                    fontSize: Responsive.sp(ctx, 14),
                                     fontWeight: FontWeight.w500,
                                     color: _C.textPrimary,
                                   ),
                                 ),
                                 Text(
                                   'γ = ${gas.gamma}',
-                                  style: const TextStyle(
-                                    fontSize: 13,
+                                  style: TextStyle(
+                                    fontSize: Responsive.sp(ctx, 13),
                                     color: _C.labelMedium,
                                   ),
                                 ),
@@ -1866,97 +1917,112 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: _C.cardBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Responsive.wp(context, 12)),
+      ),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _ratioBadge(widget.title),
-          const SizedBox(width: 8),
-          _ratioBadge(widget.inverseTitle),
+          _ratioBadge(context, widget.title),
+          SizedBox(width: Responsive.wp(context, 8)),
+          _ratioBadge(context, widget.inverseTitle),
         ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Enter either value to compute the other:',
-            style: TextStyle(fontSize: 11.0, color: _C.labelMedium),
+            style: TextStyle(
+              fontSize: Responsive.sp(context, 11),
+              color: _C.labelMedium,
+            ),
           ),
-          const SizedBox(height: 10),
-          _handyRow(widget.label1, _ctrl1, _onNumeratorChanged, _error1),
+          SizedBox(height: Responsive.hp(context, 10)),
+          _handyRow(context, widget.label1, _ctrl1, _onNumeratorChanged, _error1),
           if (_error1 != null) ...[
-            const SizedBox(height: 4),
-            _errorTextWidget(_error1!),
+            SizedBox(height: Responsive.hp(context, 4)),
+            _errorTextWidget(context, _error1!),
           ],
-          const SizedBox(height: 8),
+          SizedBox(height: Responsive.hp(context, 8)),
           Row(
             children: [
-              const SizedBox(width: 8),
+              SizedBox(width: Responsive.wp(context, 8)),
               Expanded(child: Container(height: 1, color: _C.sectionDiv)),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 8)),
                 child: Text(
                   '÷  ratio',
-                  style: TextStyle(fontSize: 9, color: _C.labelSmall),
+                  style: TextStyle(
+                    fontSize: Responsive.sp(context, 9),
+                    color: _C.labelSmall,
+                  ),
                 ),
               ),
               Expanded(child: Container(height: 1, color: _C.sectionDiv)),
             ],
           ),
-          const SizedBox(height: 8),
-          _handyRow(widget.label2, _ctrl2, _onDenominatorChanged, _error2),
+          SizedBox(height: Responsive.hp(context, 8)),
+          _handyRow(context, widget.label2, _ctrl2, _onDenominatorChanged, _error2),
           if (_error2 != null) ...[
-            const SizedBox(height: 4),
-            _errorTextWidget(_error2!),
+            SizedBox(height: Responsive.hp(context, 4)),
+            _errorTextWidget(context, _error2!),
           ],
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             'Done',
-            style: TextStyle(color: _C.headerBg, fontSize: 12),
+            style: TextStyle(
+              color: _C.headerBg,
+              fontSize: Responsive.sp(context, 12),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _ratioBadge(String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  Widget _ratioBadge(BuildContext context, String text) => Container(
+    padding: EdgeInsets.symmetric(
+      horizontal: Responsive.pad(context, 8),
+      vertical: Responsive.pad(context, 4),
+    ),
     decoration: BoxDecoration(
       color: _C.headerBg.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
       border: Border.all(
         color: _C.headerBg.withValues(alpha: 0.4),
       ),
     ),
     child: Text(
       text,
-      style: const TextStyle(
-        fontSize: 11.5,
+      style: TextStyle(
+        fontSize: Responsive.sp(context, 11.5),
         fontWeight: FontWeight.w600,
         color: _C.headerBg,
       ),
     ),
   );
 
-  Widget _errorTextWidget(String msg) => Row(
+  Widget _errorTextWidget(BuildContext context, String msg) => Row(
     children: [
-      const Icon(Icons.error_outline, size: 13, color: _C.errorText),
-      const SizedBox(width: 4),
+      Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
+      SizedBox(width: Responsive.wp(context, 4)),
       Expanded(
         child: Text(
           msg,
-          style: const TextStyle(fontSize: 11, color: _C.errorText),
+          style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
         ),
       ),
     ],
   );
 
   Widget _handyRow(
+    BuildContext context,
     String label,
     TextEditingController ctrl,
     ValueChanged<String> onChanged,
@@ -1965,23 +2031,23 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
     return Row(
       children: [
         SizedBox(
-          width: 36,
+          width: Responsive.wp(context, 36),
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
+            style: TextStyle(
+              fontSize: Responsive.sp(context, 12),
               color: _C.fieldLabel,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: Responsive.wp(context, 8)),
         Expanded(
           child: Container(
-            height: 38,
+            height: Responsive.hp(context, 38),
             decoration: BoxDecoration(
               color: _C.handyCalcBg,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
               border: Border.all(color: _C.handyCalcBorder),
             ),
             child: TextField(
@@ -1995,21 +2061,21 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
               ],
               autocorrect: false,
               enableSuggestions: false,
-              style: const TextStyle(
-                fontSize: 13,
+              style: TextStyle(
+                fontSize: Responsive.sp(context, 13),
                 color: _C.textPrimary,
                 fontWeight: FontWeight.w500,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 9,
+                  horizontal: Responsive.pad(context, 10),
+                  vertical: Responsive.pad(context, 9),
                 ),
                 border: InputBorder.none,
                 hintText: 'Enter value',
                 hintStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: Responsive.sp(context, 12),
                   color: _C.fieldHint,
                   fontWeight: FontWeight.w400,
                 ),
@@ -2026,24 +2092,35 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
 //  Reusable Card  (identical to Isentropic page)
 // ─────────────────────────────────────────────
 class _Card extends StatelessWidget {
-  const _Card({required this.header, required this.children});
+  const _Card({
+    required this.context,
+    required this.header,
+    required this.children,
+  });
 
+  final BuildContext context;
   final Widget header;
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext ctx) {
+    
     return Container(
       decoration: BoxDecoration(
         color: _C.cardBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(Responsive.wp(ctx, 12)),
         border: Border.all(color: _C.cardBorder, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            padding: EdgeInsets.fromLTRB(
+              Responsive.pad(ctx, 14),
+              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 14),
+              Responsive.pad(ctx, 10),
+            ),
             child: header,
           ),
           const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),

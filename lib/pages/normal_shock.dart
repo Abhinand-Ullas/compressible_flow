@@ -61,13 +61,94 @@ const List<_GasEntry> _kGases = [
   _GasEntry('Oxygen', 1.4),
   _GasEntry('Propane', 1.12),
   _GasEntry('Water Vap.', 1.33),
-  _GasEntry('Other', double.nan),
+  _GasEntry('Other', 2.0),
 ];
 
 // ─────────────────────────────────────────────
 //  Enum: active input field
 // ─────────────────────────────────────────────
 enum _NSField { none, m1, m2, t2t1, p2p1, rho2rho1, p02p01, p02p1, delvA1 }
+
+// ─────────────────────────────────────────────
+//  Simple arithmetic expression evaluator
+//  Supports: + - * / ^ and parentheses
+// ─────────────────────────────────────────────
+double? _evalExpr(String input) {
+  final s = input.trim().replaceAll(' ', '');
+  if (s.isEmpty) return null;
+  try {
+    final result = _ExprParser(s).parse();
+    return result.isNaN || result.isInfinite ? null : result;
+  } catch (_) {
+    return null;
+  }
+}
+
+class _ExprParser {
+  _ExprParser(this._s);
+  final String _s;
+  int _pos = 0;
+
+  double parse() {
+    final val = _parseAddSub();
+    if (_pos != _s.length) throw FormatException('unexpected char');
+    return val;
+  }
+
+  double _parseAddSub() {
+    double val = _parseMulDiv();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '+') { _pos++; val += _parseMulDiv(); }
+      else if (_s[_pos] == '-') { _pos++; val -= _parseMulDiv(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parseMulDiv() {
+    double val = _parsePow();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '*') { _pos++; val *= _parsePow(); }
+      else if (_s[_pos] == '/') { _pos++; val /= _parsePow(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parsePow() {
+    double base = _parseUnary();
+    if (_pos < _s.length && _s[_pos] == '^') {
+      _pos++;
+      final exp = _parseUnary();
+      return pow(base, exp).toDouble();
+    }
+    return base;
+  }
+
+  double _parseUnary() {
+    if (_pos < _s.length && _s[_pos] == '-') { _pos++; return -_parsePrimary(); }
+    if (_pos < _s.length && _s[_pos] == '+') { _pos++; return _parsePrimary(); }
+    return _parsePrimary();
+  }
+
+  double _parsePrimary() {
+    if (_pos < _s.length && _s[_pos] == '(') {
+      _pos++;
+      final val = _parseAddSub();
+      if (_pos >= _s.length || _s[_pos] != ')') throw FormatException('missing )');
+      _pos++;
+      return val;
+    }
+    return _parseNumber();
+  }
+
+  double _parseNumber() {
+    final start = _pos;
+    while (_pos < _s.length && (RegExp(r'[0-9.]').hasMatch(_s[_pos]))) _pos++;
+    if (_pos == start) throw FormatException('expected number at pos $_pos');
+    return double.parse(_s.substring(start, _pos));
+  }
+}
 
 // ─────────────────────────────────────────────
 //  Calculation engine  (pure, no Flutter deps)
@@ -296,6 +377,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   String _selectedGasName = 'Air';
   bool _updating = false;
 
+  // Inverse ratio toggle — flips all ratio labels and values
+  bool _inverseRatio = false;
+
   @override
   void initState() {
     super.initState();
@@ -364,11 +448,11 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       });
       return;
     }
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
         _gammaValid = false;
-        _gammaError = 'Invalid number';
+        _gammaError = 'Invalid expression';
         _result = null;
       });
       return;
@@ -406,7 +490,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.m1;
     _clearOtherErrors(_NSField.m1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.m1] = null;
         _result = null;
@@ -414,10 +498,10 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.m1);
       return;
     }
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_NSField.m1] = 'Invalid format';
+        _fieldErrors[_NSField.m1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.m1);
@@ -444,7 +528,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.m2;
     _clearOtherErrors(_NSField.m2);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.m2] = null;
         _result = null;
@@ -452,10 +536,10 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.m2);
       return;
     }
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_NSField.m2] = 'Invalid format';
+        _fieldErrors[_NSField.m2] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.m2);
@@ -485,7 +569,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.t2t1;
     _clearOtherErrors(_NSField.t2t1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.t2t1] = null;
         _result = null;
@@ -493,18 +577,22 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.t2t1);
       return;
     }
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_NSField.t2t1] = 'Invalid format';
+        _fieldErrors[_NSField.t2t1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.t2t1);
       return;
     }
+    // If inverse: user entered T₁/T₂, so T₂/T₁ = 1/input
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
     if (val <= 1.0) {
       setState(() {
-        _fieldErrors[_NSField.t2t1] = 'T₂/T₁ must be greater than 1';
+        _fieldErrors[_NSField.t2t1] = _inverseRatio
+            ? 'T₁/T₂ must be between 0 and 1'
+            : 'T₂/T₁ must be greater than 1';
         _result = null;
       });
       _clearComputedFields(_NSField.t2t1);
@@ -524,7 +612,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.p2p1;
     _clearOtherErrors(_NSField.p2p1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.p2p1] = null;
         _result = null;
@@ -532,18 +620,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.p2p1);
       return;
     }
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_NSField.p2p1] = 'Invalid format';
+        _fieldErrors[_NSField.p2p1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.p2p1);
       return;
     }
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
     if (val <= 1.0) {
       setState(() {
-        _fieldErrors[_NSField.p2p1] = 'P₂/P₁ must be greater than 1';
+        _fieldErrors[_NSField.p2p1] = _inverseRatio
+            ? 'P₁/P₂ must be between 0 and 1'
+            : 'P₂/P₁ must be greater than 1';
         _result = null;
       });
       _clearComputedFields(_NSField.p2p1);
@@ -563,7 +654,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.rho2rho1;
     _clearOtherErrors(_NSField.rho2rho1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.rho2rho1] = null;
         _result = null;
@@ -571,20 +662,22 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.rho2rho1);
       return;
     }
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_NSField.rho2rho1] = 'Invalid format';
+        _fieldErrors[_NSField.rho2rho1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.rho2rho1);
       return;
     }
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
     final maxRho = NormalShockEngine.rho2Rho1max(_gamma);
     if (val <= 1.0 || val >= maxRho) {
       setState(() {
-        _fieldErrors[_NSField.rho2rho1] =
-            'ρ₂/ρ₁ must be between 1 and ${_fmt(maxRho)}';
+        _fieldErrors[_NSField.rho2rho1] = _inverseRatio
+            ? 'ρ₁/ρ₂ must be between ${_fmt(1.0/maxRho)} and 1'
+            : 'ρ₂/ρ₁ must be between 1 and ${_fmt(maxRho)}';
         _result = null;
       });
       _clearComputedFields(_NSField.rho2rho1);
@@ -606,7 +699,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.p02p01;
     _clearOtherErrors(_NSField.p02p01);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.p02p01] = null;
         _result = null;
@@ -614,18 +707,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.p02p01);
       return;
     }
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_NSField.p02p01] = 'Invalid format';
+        _fieldErrors[_NSField.p02p01] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.p02p01);
       return;
     }
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
     if (val <= 0.0 || val >= 1.0) {
       setState(() {
-        _fieldErrors[_NSField.p02p01] = 'P₀₂/P₀₁ must be between 0 and 1';
+        _fieldErrors[_NSField.p02p01] = _inverseRatio
+            ? 'P₀₁/P₀₂ must be greater than 1'
+            : 'P₀₂/P₀₁ must be between 0 and 1';
         _result = null;
       });
       _clearComputedFields(_NSField.p02p01);
@@ -645,7 +741,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.p02p1;
     _clearOtherErrors(_NSField.p02p1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.p02p1] = null;
         _result = null;
@@ -653,20 +749,23 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.p02p1);
       return;
     }
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_NSField.p02p1] = 'Invalid format';
+        _fieldErrors[_NSField.p02p1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.p02p1);
       return;
     }
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
     final minP02p1 = NormalShockEngine.p02p1min(_gamma);
     if (val <= minP02p1) {
       setState(() {
         _fieldErrors[_NSField.p02p1] =
-            'P₀₂/P₁ must be greater than ${_fmt(minP02p1)}';
+            _inverseRatio
+                ? 'P₁/P₀₂ must be between 0 and ${_fmt(1.0/minP02p1)}'
+                : 'P₀₂/P₁ must be greater than ${_fmt(minP02p1)}';
         _result = null;
       });
       _clearComputedFields(_NSField.p02p1);
@@ -686,7 +785,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     _activeField = _NSField.delvA1;
     _clearOtherErrors(_NSField.delvA1);
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_NSField.delvA1] = null;
         _result = null;
@@ -694,10 +793,10 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       _clearComputedFields(_NSField.delvA1);
       return;
     }
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_NSField.delvA1] = 'Invalid format';
+        _fieldErrors[_NSField.delvA1] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_NSField.delvA1);
@@ -771,11 +870,17 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     final r = _result!;
     setIfNotActive(_NSField.m1, _m1Ctrl, () => _fmt(r.m1));
     setIfNotActive(_NSField.m2, _m2Ctrl, () => _fmt(r.m2));
-    setIfNotActive(_NSField.t2t1, _t2t1Ctrl, () => _fmt(r.t2t1));
-    setIfNotActive(_NSField.p2p1, _p2p1Ctrl, () => _fmt(r.p2p1));
-    setIfNotActive(_NSField.rho2rho1, _rho2rho1Ctrl, () => _fmt(r.rho2rho1));
-    setIfNotActive(_NSField.p02p01, _p02p01Ctrl, () => _fmt(r.p02p01));
-    setIfNotActive(_NSField.p02p1, _p02p1Ctrl, () => _fmt(r.p02p1));
+    // Ratio fields: display 1/value when inverse mode is on
+    setIfNotActive(_NSField.t2t1, _t2t1Ctrl,
+        () => _inverseRatio ? _fmt(1.0 / r.t2t1) : _fmt(r.t2t1));
+    setIfNotActive(_NSField.p2p1, _p2p1Ctrl,
+        () => _inverseRatio ? _fmt(1.0 / r.p2p1) : _fmt(r.p2p1));
+    setIfNotActive(_NSField.rho2rho1, _rho2rho1Ctrl,
+        () => _inverseRatio ? _fmt(1.0 / r.rho2rho1) : _fmt(r.rho2rho1));
+    setIfNotActive(_NSField.p02p01, _p02p01Ctrl,
+        () => _inverseRatio ? _fmt(1.0 / r.p02p01) : _fmt(r.p02p01));
+    setIfNotActive(_NSField.p02p1, _p02p1Ctrl,
+        () => _inverseRatio ? _fmt(1.0 / r.p02p1) : _fmt(r.p02p1));
     setIfNotActive(_NSField.delvA1, _delvA1Ctrl, () => _fmt(r.delvA1));
 
     _updating = false;
@@ -824,6 +929,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
   // ─────────────────────────────────────────────
   void _openHandyCalc({
     required String title,
+    required String inverseTitle,
     required String label1,
     required String label2,
     required double ratio,
@@ -832,6 +938,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       context: context,
       builder: (_) => _HandyCalcDialog(
         title: title,
+        inverseTitle: inverseTitle,
         label1: label1,
         label2: label2,
         ratio: ratio,
@@ -872,17 +979,17 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             _buildAppBar(context),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildDescription(),
-                    const SizedBox(height: 14),
+                    // _buildDescription(),  // moved to info section
+                    // const SizedBox(height: 14),
                     _buildGammaCard(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildFieldsCard(),
-                    const SizedBox(height: 12),
-                    _buildNoteCard(),
+                    // const SizedBox(height: 12),
+                    // _buildNoteCard(),  // moved to info section
                   ],
                 ),
               ),
@@ -919,11 +1026,6 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
-                tooltip: 'Reset all',
-                onPressed: _resetAll,
-              ),
-              IconButton(
                 icon: const Icon(
                   Icons.info_outline,
                   color: Colors.white,
@@ -938,7 +1040,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     );
   }
 
-  // ── Description ───────────────────────────────────────────────────────────
+  // ── Description ── (commented out; moved to info section)
+  /*
   Widget _buildDescription() {
     return const Text(
       'Enter any one flow parameter to instantly compute all remaining '
@@ -947,6 +1050,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       style: TextStyle(fontSize: 12, color: _C.descText, height: 1.55),
     );
   }
+  */
 
   // ── Gamma card ────────────────────────────────────────────────────────────
   Widget _buildGammaCard() {
@@ -954,26 +1058,17 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       header: _cardHeader(Icons.tune, 'SPECIFIC HEAT RATIO  γ'),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'γ  (Gamma)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: _C.fieldLabel,
-                ),
-              ),
-              const SizedBox(height: 7),
               Row(
                 children: [
                   Expanded(
                     child: _buildInputField(
                       controller: _gammaCtrl,
                       focusNode: _gammaFocus,
-                      hintText: 'e.g. 1.4',
+                      hintText: 'Must be greater than 1 (e.g. 1.4)',
                       onChanged: _onGammaChanged,
                       hasError: !_gammaValid,
                     ),
@@ -995,11 +1090,6 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                 const SizedBox(height: 4),
                 _errorText(_gammaError!),
               ],
-              const SizedBox(height: 4),
-              const Text(
-                'Must be greater than 1',
-                style: TextStyle(fontSize: 11, color: _C.fieldSubHint),
-              ),
             ],
           ),
         ),
@@ -1007,38 +1097,125 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     );
   }
 
-  // ── Fields card ───────────────────────────────────────────────────────────
+  // ── Fields card ────────────────────────────────────────────────────────────
   Widget _buildFieldsCard() {
     final r = _result;
     final bool hasResult = r != null;
 
+    // Dynamic labels based on inverse toggle
+    final t2t1Sym    = _inverseRatio ? 'T₁/T₂'    : 'T₂/T₁';
+    final p2p1Sym    = _inverseRatio ? 'P₁/P₂'    : 'P₂/P₁';
+    final rhoSym     = _inverseRatio ? 'ρ₁/ρ₂'    : 'ρ₂/ρ₁';
+    final p02p01Sym  = _inverseRatio ? 'P₀₁/P₀₂'  : 'P₀₂/P₀₁';
+    final p02p1Sym   = _inverseRatio ? 'P₁/P₀₂'   : 'P₀₂/P₁';
+
+    final t2t1Hint   = _inverseRatio ? 'Between 0 and 1' : 'Greater than 1';
+    final p2p1Hint   = _inverseRatio ? 'Between 0 and 1' : 'Greater than 1';
+    final rhoHint    = _inverseRatio ? 'Between 0 and 1' : 'Between 1 and (γ+1)/(γ−1)';
+    final p02p01Hint = _inverseRatio ? 'Greater than 1'  : 'Between 0 and 1';
+    final p02p1Hint  = _inverseRatio ? 'Between 0 and 1' : 'Between 0 and P₀₂/P₁ max';
+
     return _Card(
-      header: _cardHeader(Icons.calculate_outlined, 'SHOCK PROPERTIES'),
+      header: Row(
+        children: [
+          Expanded(child: _cardHeader(Icons.calculate_outlined, 'SHOCK PROPERTIES')),
+          GestureDetector(
+            onTap: () {
+              setState(() => _inverseRatio = !_inverseRatio);
+              _writeComputedFields();
+              // Also flip the active field if it is a ratio
+              if (_result != null) {
+                _updating = true;
+                final r = _result!;
+                switch (_activeField) {
+                  case _NSField.t2t1:
+                    _t2t1Ctrl.text = _inverseRatio ? _fmt(1.0 / r.t2t1) : _fmt(r.t2t1);
+                  case _NSField.p2p1:
+                    _p2p1Ctrl.text = _inverseRatio ? _fmt(1.0 / r.p2p1) : _fmt(r.p2p1);
+                  case _NSField.rho2rho1:
+                    _rho2rho1Ctrl.text = _inverseRatio ? _fmt(1.0 / r.rho2rho1) : _fmt(r.rho2rho1);
+                  case _NSField.p02p01:
+                    _p02p01Ctrl.text = _inverseRatio ? _fmt(1.0 / r.p02p01) : _fmt(r.p02p01);
+                  case _NSField.p02p1:
+                    _p02p1Ctrl.text = _inverseRatio ? _fmt(1.0 / r.p02p1) : _fmt(r.p02p1);
+                  default:
+                    break;
+                }
+                _updating = false;
+              } else {
+                TextEditingController? ctrl;
+                void Function(String)? onChanged;
+                switch (_activeField) {
+                  case _NSField.t2t1: ctrl = _t2t1Ctrl; onChanged = _onT2T1Changed; break;
+                  case _NSField.p2p1: ctrl = _p2p1Ctrl; onChanged = _onP2P1Changed; break;
+                  case _NSField.rho2rho1: ctrl = _rho2rho1Ctrl; onChanged = _onRho2Rho1Changed; break;
+                  case _NSField.p02p01: ctrl = _p02p01Ctrl; onChanged = _onP02P01Changed; break;
+                  case _NSField.p02p1: ctrl = _p02p1Ctrl; onChanged = _onP02P1Changed; break;
+                  default: break;
+                }
+                if (ctrl != null && onChanged != null) {
+                  final val = _evalExpr(ctrl.text);
+                  if (val != null && val != 0) {
+                    final invertedText = _fmt(1.0 / val);
+                    ctrl.text = invertedText;
+                    onChanged(invertedText);
+                  }
+                }
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: _inverseRatio ? _C.headerBg : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.swap_horiz,
+                    size: 14,
+                    color: _inverseRatio ? Colors.white : _C.labelMedium,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Reciprocal',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: _inverseRatio ? Colors.white : _C.labelMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       children: [
-        // ── M₁ ──────────────────────────────────────────────────────────────
+        // ── M₁ ───────────────────────────────────────────────────────────────────
         _flowField(
           field: _NSField.m1,
           label: 'Mach Number (before shock)',
           symbol: 'M₁',
           controller: _m1Ctrl,
           focusNode: _m1Focus,
-          hintText: 'Enter M₁ (> 1)',
-          subHint: 'Must be greater than 1',
+          hintText: 'Must be greater than 1',
           onChanged: _onM1Changed,
           error: _fieldErrors[_NSField.m1],
         ),
 
         _divider(),
 
-        // ── M₂ ──────────────────────────────────────────────────────────────
+        // ── M₂ ───────────────────────────────────────────────────────────────────
         _flowField(
           field: _NSField.m2,
           label: 'Mach Number (after shock)',
           symbol: 'M₂',
           controller: _m2Ctrl,
           focusNode: _m2Focus,
-          hintText: 'Enter M₂',
-          subHint: 'Between M₂min and 1',
+          hintText: 'Between M₂min and 1',
           onChanged: _onM2Changed,
           error: _fieldErrors[_NSField.m2],
         ),
@@ -1049,19 +1226,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         _flowField(
           field: _NSField.t2t1,
           label: 'Temperature Ratio',
-          symbol: 'T₂/T₁',
+          symbol: t2t1Sym,
           controller: _t2t1Ctrl,
           focusNode: _t2t1Focus,
-          hintText: 'Enter T₂/T₁',
-          subHint: 'Must be greater than 1',
+          hintText: t2t1Hint,
           onChanged: _onT2T1Changed,
           error: _fieldErrors[_NSField.t2t1],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'T₂/T₁ = ${_fmt(r.t2t1)}',
-                  label1: 'T₂ =',
-                  label2: 'T₁ =',
-                  ratio: r.t2t1,
+                  title: '$t2t1Sym = ${_t2t1Ctrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'T₂/T₁ = ${_fmt(r!.t2t1)}'
+                      : 'T₁/T₂ = ${_fmt(1.0 / r!.t2t1)}',
+                  label1: _inverseRatio ? 'T₁ =' : 'T₂ =',
+                  label2: _inverseRatio ? 'T₂ =' : 'T₁ =',
+                  ratio: _inverseRatio ? 1.0 / r!.t2t1 : r!.t2t1,
                 )
               : null,
         ),
@@ -1072,19 +1251,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         _flowField(
           field: _NSField.p2p1,
           label: 'Pressure Ratio',
-          symbol: 'P₂/P₁',
+          symbol: p2p1Sym,
           controller: _p2p1Ctrl,
           focusNode: _p2p1Focus,
-          hintText: 'Enter P₂/P₁',
-          subHint: 'Must be greater than 1',
+          hintText: p2p1Hint,
           onChanged: _onP2P1Changed,
           error: _fieldErrors[_NSField.p2p1],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'P₂/P₁ = ${_fmt(r.p2p1)}',
-                  label1: 'P₂ =',
-                  label2: 'P₁ =',
-                  ratio: r.p2p1,
+                  title: '$p2p1Sym = ${_p2p1Ctrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'P₂/P₁ = ${_fmt(r!.p2p1)}'
+                      : 'P₁/P₂ = ${_fmt(1.0 / r!.p2p1)}',
+                  label1: _inverseRatio ? 'P₁ =' : 'P₂ =',
+                  label2: _inverseRatio ? 'P₂ =' : 'P₁ =',
+                  ratio: _inverseRatio ? 1.0 / r!.p2p1 : r!.p2p1,
                 )
               : null,
         ),
@@ -1095,19 +1276,21 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         _flowField(
           field: _NSField.rho2rho1,
           label: 'Density Ratio',
-          symbol: 'ρ₂/ρ₁',
+          symbol: rhoSym,
           controller: _rho2rho1Ctrl,
           focusNode: _rho2rho1Focus,
-          hintText: 'Enter ρ₂/ρ₁',
-          subHint: 'Between 1 and (γ+1)/(γ−1)',
+          hintText: rhoHint,
           onChanged: _onRho2Rho1Changed,
           error: _fieldErrors[_NSField.rho2rho1],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'ρ₂/ρ₁ = ${_fmt(r.rho2rho1)}',
-                  label1: 'ρ₂ =',
-                  label2: 'ρ₁ =',
-                  ratio: r.rho2rho1,
+                  title: '$rhoSym = ${_rho2rho1Ctrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'ρ₂/ρ₁ = ${_fmt(r!.rho2rho1)}'
+                      : 'ρ₁/ρ₂ = ${_fmt(1.0 / r!.rho2rho1)}',
+                  label1: _inverseRatio ? 'ρ₁ =' : 'ρ₂ =',
+                  label2: _inverseRatio ? 'ρ₂ =' : 'ρ₁ =',
+                  ratio: _inverseRatio ? 1.0 / r!.rho2rho1 : r!.rho2rho1,
                 )
               : null,
         ),
@@ -1118,42 +1301,46 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         _flowField(
           field: _NSField.p02p01,
           label: 'Stagnation Pressure Ratio',
-          symbol: 'P₀₂/P₀₁',
+          symbol: p02p01Sym,
           controller: _p02p01Ctrl,
           focusNode: _p02p01Focus,
-          hintText: 'Enter P₀₂/P₀₁',
-          subHint: 'Between 0 and 1',
+          hintText: p02p01Hint,
           onChanged: _onP02P01Changed,
           error: _fieldErrors[_NSField.p02p01],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'P₀₂/P₀₁ = ${_fmt(r.p02p01)}',
-                  label1: 'P₀₂ =',
-                  label2: 'P₀₁ =',
-                  ratio: r.p02p01,
+                  title: '$p02p01Sym = ${_p02p01Ctrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'P₀₂/P₀₁ = ${_fmt(r!.p02p01)}'
+                      : 'P₀₁/P₀₂ = ${_fmt(1.0 / r!.p02p01)}',
+                  label1: _inverseRatio ? 'P₀₁ =' : 'P₀₂ =',
+                  label2: _inverseRatio ? 'P₀₂ =' : 'P₀₁ =',
+                  ratio: _inverseRatio ? 1.0 / r!.p02p01 : r!.p02p01,
                 )
               : null,
         ),
 
         _divider(),
 
-        // ── P₀₂/P₁ ──────────────────────────────────────────────────────────
+        // ── P₀₂/P₁ (or P₁/P₀₂) ─────────────────────────────────────────────
         _flowField(
           field: _NSField.p02p1,
           label: 'Pitot-to-Static Ratio',
-          symbol: 'P₀₂/P₁',
+          symbol: p02p1Sym,
           controller: _p02p1Ctrl,
           focusNode: _p02p1Focus,
-          hintText: 'Enter P₀₂/P₁',
-          subHint: 'Must be greater than P₀₂/P₁ min',
+          hintText: p02p1Hint,
           onChanged: _onP02P1Changed,
           error: _fieldErrors[_NSField.p02p1],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'P₀₂/P₁ = ${_fmt(r.p02p1)}',
-                  label1: 'P₀₂ =',
-                  label2: 'P₁ =',
-                  ratio: r.p02p1,
+                  title: '$p02p1Sym = ${_p02p1Ctrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'P₀₂/P₁ = ${_fmt(r!.p02p1)}'
+                      : 'P₁/P₀₂ = ${_fmt(1.0 / r!.p02p1)}',
+                  label1: _inverseRatio ? 'P₁ =' : 'P₀₂ =',
+                  label2: _inverseRatio ? 'P₀₂ =' : 'P₁ =',
+                  ratio: _inverseRatio ? 1.0 / r!.p02p1 : r!.p02p1,
                 )
               : null,
         ),
@@ -1167,8 +1354,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
           symbol: 'ΔV/a₁',
           controller: _delvA1Ctrl,
           focusNode: _delvA1Focus,
-          hintText: 'Enter ΔV/a₁',
-          subHint: 'Must be greater than 0',
+          hintText: 'Must be greater than 0',
           onChanged: _onDelvA1Changed,
           error: _fieldErrors[_NSField.delvA1],
           isLast: true,
@@ -1177,7 +1363,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     );
   }
 
-  // ── Note card ─────────────────────────────────────────────────────────────
+  // ── Note card ── (commented out; moved to info section)
+  /*
   Widget _buildNoteCard() {
     return Container(
       decoration: BoxDecoration(
@@ -1208,6 +1395,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       ),
     );
   }
+  */
 
   // ─────────────────────────────────────────────
   //  Reusable sub-builders
@@ -1217,19 +1405,19 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     return Row(
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: 24,
+          height: 24,
           decoration: const BoxDecoration(
             color: _C.headerBg,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.white, size: 17),
+          child: Icon(icon, color: Colors.white, size: 13),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Text(
           title,
           style: const TextStyle(
-            fontSize: 15,
+            fontSize: 13.5,
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -1250,9 +1438,8 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     required FocusNode focusNode,
     required String hintText,
     required ValueChanged<String> onChanged,
-    String? subHint,
     String? error,
-    VoidCallback? onLabelTap,
+    VoidCallback? onHandyCalc,
     Widget? trailing,
     bool isLast = false,
   }) {
@@ -1261,55 +1448,40 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
         _activeField != _NSField.none && !isActive && _result != null;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 14, 16, isLast ? 16 : 0),
+      padding: EdgeInsets.fromLTRB(14, 8, 14, isLast ? 10 : 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: GestureDetector(
-                  onTap: onLabelTap,
-                  child: Row(
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: onLabelTap != null
-                              ? _C.headerBg
-                              : _C.fieldLabel,
-                        ),
+                child: Row(
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _C.fieldLabel,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        symbol,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          fontStyle: FontStyle.italic,
-                          color: onLabelTap != null
-                              ? _C.headerBg
-                              : _C.fieldLabel,
-                        ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      symbol,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        fontStyle: FontStyle.italic,
+                        color: _C.fieldLabel,
                       ),
-                      if (onLabelTap != null) ...[
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.touch_app,
-                          size: 13,
-                          color: _C.headerBg,
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 5),
           _buildInputField(
             controller: controller,
             focusNode: focusNode,
@@ -1318,16 +1490,11 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             hasError: error != null,
             isComputed: isComputed,
             isActive: isActive,
+            onHandyCalc: onHandyCalc,
           ),
           if (error != null) ...[
             const SizedBox(height: 4),
             _errorText(error),
-          ] else if (subHint != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              subHint,
-              style: const TextStyle(fontSize: 11, color: _C.fieldSubHint),
-            ),
           ],
         ],
       ),
@@ -1343,6 +1510,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     bool hasError = false,
     bool isComputed = false,
     bool isActive = false,
+    VoidCallback? onHandyCalc,
   }) {
     return ListenableBuilder(
       listenable: focusNode,
@@ -1364,6 +1532,27 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
           bgColor = _C.fieldBg;
         }
 
+        Widget? suffix;
+        if (onHandyCalc != null) {
+          suffix = GestureDetector(
+            onTap: onHandyCalc,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Icon(
+                Icons.compare_arrows_rounded,
+                size: 18,
+                color: _C.headerBg,
+              ),
+            ),
+          );
+        } else if (isComputed) {
+          suffix = const Padding(
+            padding: EdgeInsets.only(right: 10),
+            child: Icon(Icons.lock_outline, size: 14, color: _C.labelSmall),
+          );
+        }
+
         return Container(
           key: key,
           height: 46,
@@ -1376,13 +1565,15 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
             controller: controller,
             focusNode: focusNode,
             onChanged: onChanged,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-              signed: false,
-            ),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
+                return newValue.copyWith(text: text);
+              }),
             ],
+            autocorrect: false,
+            enableSuggestions: false,
             style: TextStyle(
               fontSize: 14,
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
@@ -1397,20 +1588,11 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
-              suffixIcon: isComputed
-                  ? const Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: Icon(
-                        Icons.lock_outline,
-                        size: 14,
-                        color: _C.labelSmall,
-                      ),
-                    )
-                  : null,
+              suffixIcon: suffix,
               suffixIconConstraints: const BoxConstraints(
                 minWidth: 30,
                 minHeight: 30,
@@ -1612,12 +1794,14 @@ class _GasDropdownButton extends StatelessWidget {
 class _HandyCalcDialog extends StatefulWidget {
   const _HandyCalcDialog({
     required this.title,
+    required this.inverseTitle,
     required this.label1,
     required this.label2,
     required this.ratio,
   });
 
   final String title;
+  final String inverseTitle;
   final String label1;
   final String label2;
   final double ratio;
@@ -1696,14 +1880,14 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: _C.cardBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text(
-        widget.title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: _C.headerBg,
-        ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _ratioBadge(widget.title),
+          const SizedBox(width: 8),
+          _ratioBadge(widget.inverseTitle),
+        ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1711,15 +1895,15 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
         children: [
           const Text(
             'Enter either value to compute the other:',
-            style: TextStyle(fontSize: 11.5, color: _C.labelMedium),
+            style: TextStyle(fontSize: 11.0, color: _C.labelMedium),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _handyRow(widget.label1, _ctrl1, _onNumeratorChanged, _error1),
           if (_error1 != null) ...[
             const SizedBox(height: 4),
             _errorTextWidget(_error1!),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
             children: [
               const SizedBox(width: 8),
@@ -1728,13 +1912,13 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   '÷  ratio',
-                  style: TextStyle(fontSize: 10, color: _C.labelSmall),
+                  style: TextStyle(fontSize: 9, color: _C.labelSmall),
                 ),
               ),
               Expanded(child: Container(height: 1, color: _C.sectionDiv)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _handyRow(widget.label2, _ctrl2, _onDenominatorChanged, _error2),
           if (_error2 != null) ...[
             const SizedBox(height: 4),
@@ -1747,12 +1931,31 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text(
             'Done',
-            style: TextStyle(color: _C.headerBg, fontSize: 13),
+            style: TextStyle(color: _C.headerBg, fontSize: 12),
           ),
         ),
       ],
     );
   }
+
+  Widget _ratioBadge(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: _C.headerBg.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(
+        color: _C.headerBg.withValues(alpha: 0.4),
+      ),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w600,
+        color: _C.headerBg,
+      ),
+    ),
+  );
 
   Widget _errorTextWidget(String msg) => Row(
     children: [
@@ -1776,11 +1979,11 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
     return Row(
       children: [
         SizedBox(
-          width: 48,
+          width: 36,
           child: Text(
             label,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               color: _C.fieldLabel,
               fontWeight: FontWeight.w500,
             ),
@@ -1789,7 +1992,7 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
         const SizedBox(width: 8),
         Expanded(
           child: Container(
-            height: 44,
+            height: 38,
             decoration: BoxDecoration(
               color: _C.handyCalcBg,
               borderRadius: BorderRadius.circular(8),
@@ -1804,21 +2007,23 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
+              autocorrect: false,
+              enableSuggestions: false,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 color: _C.textPrimary,
                 fontWeight: FontWeight.w500,
               ),
               decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                  horizontal: 10,
+                  vertical: 9,
                 ),
                 border: InputBorder.none,
                 hintText: 'Enter value',
                 hintStyle: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: _C.fieldHint,
                   fontWeight: FontWeight.w400,
                 ),
@@ -1852,7 +2057,7 @@ class _Card extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
             child: header,
           ),
           const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),

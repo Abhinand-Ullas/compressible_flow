@@ -68,13 +68,94 @@ const List<_GasEntry> _kGases = [
   _GasEntry('Oxygen', 1.4),
   _GasEntry('Propane', 1.12),
   _GasEntry('Water Vap.', 1.33),
-  _GasEntry('Other', double.nan),
+  _GasEntry('Other', 2.0),
 ];
 
 // ─────────────────────────────────────────────
 //  Enum: which field the user is currently typing in
 // ─────────────────────────────────────────────
 enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, aRatio, mu, nu }
+
+// ─────────────────────────────────────────────
+//  Simple arithmetic expression evaluator
+//  Supports: + - * / ^ and parentheses
+// ─────────────────────────────────────────────
+double? _evalExpr(String input) {
+  final s = input.trim().replaceAll(' ', '');
+  if (s.isEmpty) return null;
+  try {
+    final result = _ExprParser(s).parse();
+    return result.isNaN || result.isInfinite ? null : result;
+  } catch (_) {
+    return null;
+  }
+}
+
+class _ExprParser {
+  _ExprParser(this._s);
+  final String _s;
+  int _pos = 0;
+
+  double parse() {
+    final val = _parseAddSub();
+    if (_pos != _s.length) throw FormatException('unexpected char');
+    return val;
+  }
+
+  double _parseAddSub() {
+    double val = _parseMulDiv();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '+') { _pos++; val += _parseMulDiv(); }
+      else if (_s[_pos] == '-') { _pos++; val -= _parseMulDiv(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parseMulDiv() {
+    double val = _parsePow();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '*') { _pos++; val *= _parsePow(); }
+      else if (_s[_pos] == '/') { _pos++; val /= _parsePow(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parsePow() {
+    double base = _parseUnary();
+    if (_pos < _s.length && _s[_pos] == '^') {
+      _pos++;
+      final exp = _parseUnary(); // right-associative
+      return pow(base, exp).toDouble();
+    }
+    return base;
+  }
+
+  double _parseUnary() {
+    if (_pos < _s.length && _s[_pos] == '-') { _pos++; return -_parsePrimary(); }
+    if (_pos < _s.length && _s[_pos] == '+') { _pos++; return _parsePrimary(); }
+    return _parsePrimary();
+  }
+
+  double _parsePrimary() {
+    if (_pos < _s.length && _s[_pos] == '(') {
+      _pos++;
+      final val = _parseAddSub();
+      if (_pos >= _s.length || _s[_pos] != ')') throw FormatException('missing )');
+      _pos++;
+      return val;
+    }
+    return _parseNumber();
+  }
+
+  double _parseNumber() {
+    final start = _pos;
+    while (_pos < _s.length && (RegExp(r'[0-9.]').hasMatch(_s[_pos]))) _pos++;
+    if (_pos == start) throw FormatException('expected number at pos $_pos');
+    return double.parse(_s.substring(start, _pos));
+  }
+}
 
 // ─────────────────────────────────────────────
 //  Calculation engine  (pure, no Flutter deps)
@@ -298,6 +379,9 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   // Supersonic toggle (only relevant when A/A* is active)
   bool _isSupersonic = false;
 
+  // Inverse ratio toggle — flips all ratio labels and values
+  bool _inverseRatio = false;
+
   // Gamma dropdown — currently selected gas name (shown in the button)
   String _selectedGasName = 'Air';
 
@@ -378,11 +462,11 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
         _gammaValid = false;
-        _gammaError = 'Invalid number';
+        _gammaError = 'Invalid expression';
         _result = null;
       });
       return;
@@ -392,6 +476,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _gammaValid = false;
         _gammaError = 'γ must be greater than 1';
         _result = null;
+       // _clearComputedFields(); implement this if required.
       });
       return;
     }
@@ -426,7 +511,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.mach);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.mach] = null;
         _result = null;
@@ -435,10 +520,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_ActiveField.mach] = 'Invalid format';
+        _fieldErrors[_ActiveField.mach] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.mach);
@@ -472,7 +557,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.tRatio);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.tRatio] = null;
         _result = null;
@@ -481,19 +566,24 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_ActiveField.tRatio] = 'Invalid format';
+        _fieldErrors[_ActiveField.tRatio] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.tRatio);
       return;
     }
 
+    // If inverse ratio mode: user entered T₀/T, so T/T₀ = 1/input
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+
     if (val <= 0.0 || val >= 1.0) {
       setState(() {
-        _fieldErrors[_ActiveField.tRatio] = 'T/T₀ must be between 0 and 1';
+        _fieldErrors[_ActiveField.tRatio] = _inverseRatio
+            ? 'T₀/T must be greater than 1'
+            : 'T/T₀ must be between 0 and 1';
         _result = null;
       });
       _clearComputedFields(_ActiveField.tRatio);
@@ -519,7 +609,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.pRatio);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.pRatio] = null;
         _result = null;
@@ -528,19 +618,23 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_ActiveField.pRatio] = 'Invalid format';
+        _fieldErrors[_ActiveField.pRatio] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.pRatio);
       return;
     }
 
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+
     if (val <= 0.0 || val >= 1.0) {
       setState(() {
-        _fieldErrors[_ActiveField.pRatio] = 'P/P₀ must be between 0 and 1';
+        _fieldErrors[_ActiveField.pRatio] = _inverseRatio
+            ? 'P₀/P must be greater than 1'
+            : 'P/P₀ must be between 0 and 1';
         _result = null;
       });
       _clearComputedFields(_ActiveField.pRatio);
@@ -566,7 +660,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.rhoRatio);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.rhoRatio] = null;
         _result = null;
@@ -575,19 +669,23 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_ActiveField.rhoRatio] = 'Invalid format';
+        _fieldErrors[_ActiveField.rhoRatio] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.rhoRatio);
       return;
     }
 
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+
     if (val <= 0.0 || val >= 1.0) {
       setState(() {
-        _fieldErrors[_ActiveField.rhoRatio] = 'ρ/ρ₀ must be between 0 and 1';
+        _fieldErrors[_ActiveField.rhoRatio] = _inverseRatio
+            ? 'ρ₀/ρ must be greater than 1'
+            : 'ρ/ρ₀ must be between 0 and 1';
         _result = null;
       });
       _clearComputedFields(_ActiveField.rhoRatio);
@@ -613,7 +711,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.aRatio);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.aRatio] = null;
         _result = null;
@@ -622,19 +720,24 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
-    if (val == null) {
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
       setState(() {
-        _fieldErrors[_ActiveField.aRatio] = 'Invalid format';
+        _fieldErrors[_ActiveField.aRatio] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.aRatio);
       return;
     }
 
+    // If inverse (A*/A), convert to A/A* = 1/input
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+
     if (val < 1.0) {
       setState(() {
-        _fieldErrors[_ActiveField.aRatio] = 'A/A* must be ≥ 1';
+        _fieldErrors[_ActiveField.aRatio] = _inverseRatio
+            ? 'A*/A must be between 0 and 1'
+            : 'A/A* must be ≥ 1';
         _result = null;
       });
       _clearComputedFields(_ActiveField.aRatio);
@@ -664,7 +767,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.mu);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.mu] = null;
         _result = null;
@@ -673,10 +776,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_ActiveField.mu] = 'Invalid format';
+        _fieldErrors[_ActiveField.mu] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.mu);
@@ -712,7 +815,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _clearOtherErrors(_ActiveField.nu);
 
     final trimmed = raw.trim();
-    if (trimmed.isEmpty || trimmed == '.') {
+    if (trimmed.isEmpty) {
       setState(() {
         _fieldErrors[_ActiveField.nu] = null;
         _result = null;
@@ -721,10 +824,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       return;
     }
 
-    final val = double.tryParse(trimmed);
+    final val = _evalExpr(trimmed);
     if (val == null) {
       setState(() {
-        _fieldErrors[_ActiveField.nu] = 'Invalid format';
+        _fieldErrors[_ActiveField.nu] = 'Invalid expression';
         _result = null;
       });
       _clearComputedFields(_ActiveField.nu);
@@ -822,14 +925,15 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
 
     final r = _result!;
     setIfNotActive(_ActiveField.mach, _machCtrl, () => _fmt(r.M));
-    setIfNotActive(_ActiveField.tRatio, _tRatioCtrl, () => _fmt(r.tRatio));
-    setIfNotActive(_ActiveField.pRatio, _pRatioCtrl, () => _fmt(r.pRatio));
-    setIfNotActive(
-      _ActiveField.rhoRatio,
-      _rhoRatioCtrl,
-      () => _fmt(r.rhoRatio),
-    );
-    setIfNotActive(_ActiveField.aRatio, _aRatioCtrl, () => _fmt(r.aRatio));
+    // Ratio fields: if inverse mode, display 1/value
+    setIfNotActive(_ActiveField.tRatio, _tRatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.tRatio) : _fmt(r.tRatio));
+    setIfNotActive(_ActiveField.pRatio, _pRatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.pRatio) : _fmt(r.pRatio));
+    setIfNotActive(_ActiveField.rhoRatio, _rhoRatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio));
+    setIfNotActive(_ActiveField.aRatio, _aRatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.aRatio) : _fmt(r.aRatio));
 
     if (_activeField != _ActiveField.mu) {
       _muCtrl.text = r.mu != null ? _fmt(r.mu!) : '—';
@@ -907,14 +1011,16 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   // ─────────────────────────────────────────────
   void _openHandyCalc({
     required String title,
-    required String label1, // e.g. "T"
-    required String label2, // e.g. "T₀"
+    required String inverseTitle,
+    required String label1, // e.g. "T ="
+    required String label2, // e.g. "T₀ ="
     required double ratio,
   }) {
     showDialog(
       context: context,
       builder: (_) => _HandyCalcDialog(
         title: title,
+        inverseTitle: inverseTitle,
         label1: label1,
         label2: label2,
         ratio: ratio,
@@ -957,17 +1063,17 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
             _buildAppBar(context),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildDescription(),
-                    const SizedBox(height: 14),
+                    // _buildDescription(),  // moved to info section
+                    // const SizedBox(height: 14),
                     _buildGammaCard(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildFieldsCard(),
-                    const SizedBox(height: 12),
-                    _buildNoteCard(),
+                    // const SizedBox(height: 12),
+                    // _buildNoteCard(),  // moved to info section
                   ],
                 ),
               ),
@@ -989,8 +1095,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.menu, color: Colors.white, size: 22),
-                onPressed: widget.onDrawer ?? () {}
- // wire to  nav drawer
+                onPressed: widget.onDrawer ?? () {},
               ),
               const Expanded(
                 child: Text(
@@ -1004,11 +1109,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                   ),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
-                tooltip: 'Reset all',
-                onPressed: _resetAll,
-              ),
+              // Reset button removed — use info section
               IconButton(
                 icon: const Icon(
                   Icons.info_outline,
@@ -1024,7 +1125,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     );
   }
 
-  // ── Description ───────────────────────────────────────────────────────────
+  // ── Description ── (commented out; moved to info section)
+  /*
   Widget _buildDescription() {
     return const Text(
       'Enter any one flow parameter to instantly compute all remaining '
@@ -1033,6 +1135,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       style: TextStyle(fontSize: 12, color: _C.descText, height: 1.55),
     );
   }
+  */
 
   // ── Gamma card ────────────────────────────────────────────────────────────
   Widget _buildGammaCard() {
@@ -1040,25 +1143,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       header: _cardHeader(Icons.tune, 'SPECIFIC HEAT RATIO  γ'),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Label row
-              Row(
-                children: [
-                  const Text(
-                    'γ  (Gamma)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: _C.fieldLabel,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 7),
-              // Gamma field + dropdown button
               Row(
                 children: [
                   Expanded(
@@ -1066,7 +1154,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                       key: _gammaKey,
                       controller: _gammaCtrl,
                       focusNode: _gammaFocus,
-                      hintText: 'e.g. 1.4',
+                      hintText: 'Must be greater than 1 (e.g. 1.4)',
                       onChanged: _onGammaChanged,
                       hasError: !_gammaValid,
                     ),
@@ -1088,11 +1176,6 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                 const SizedBox(height: 4),
                 _errorText(_gammaError!),
               ],
-              const SizedBox(height: 4),
-              const Text(
-                'Must be greater than 1',
-                style: TextStyle(fontSize: 11, color: _C.fieldSubHint),
-              ),
             ],
           ),
         ),
@@ -1104,10 +1187,95 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   Widget _buildFieldsCard() {
     final r = _result;
     final bool hasResult = r != null;
-    final bool isSupersonic = hasResult && r.M >= 1.0;
+
+    // Dynamic labels based on inverse toggle
+    final tSym    = _inverseRatio ? 'T₀/T'  : 'T/T₀';
+    final pSym    = _inverseRatio ? 'P₀/P'  : 'P/P₀';
+    final rhoSym  = _inverseRatio ? 'ρ₀/ρ'  : 'ρ/ρ₀';
+    final aSym    = _inverseRatio ? 'A*/A'  : 'A/A*';
+
+    final tHint   = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
+    final pHint   = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
+    final rhoHint = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
+    final aHint   = _inverseRatio ? 'Between 0 and 1' : '≥ 1';
 
     return _Card(
-      header: _cardHeader(Icons.calculate_outlined, 'FLOW PROPERTIES'),
+      header: Row(
+        children: [
+          Expanded(child: _cardHeader(Icons.calculate_outlined, 'FLOW PROPERTIES')),
+          // Inverse ratio toggle
+          GestureDetector(
+            onTap: () {
+              setState(() => _inverseRatio = !_inverseRatio);
+              // Refresh all computed (non-active) fields
+              _writeComputedFields();
+              // Also flip the active field if it is a ratio
+              if (_result != null) {
+                _updating = true;
+                final r = _result!;
+                switch (_activeField) {
+                  case _ActiveField.tRatio:
+                    _tRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.tRatio) : _fmt(r.tRatio);
+                  case _ActiveField.pRatio:
+                    _pRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.pRatio) : _fmt(r.pRatio);
+                  case _ActiveField.rhoRatio:
+                    _rhoRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio);
+                  case _ActiveField.aRatio:
+                    _aRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.aRatio) : _fmt(r.aRatio);
+                  default:
+                    break;
+                }
+                _updating = false;
+              } else {
+                TextEditingController? ctrl;
+                void Function(String)? onChanged;
+                switch (_activeField) {
+                  case _ActiveField.tRatio: ctrl = _tRatioCtrl; onChanged = _onTRatioChanged; break;
+                  case _ActiveField.pRatio: ctrl = _pRatioCtrl; onChanged = _onPRatioChanged; break;
+                  case _ActiveField.rhoRatio: ctrl = _rhoRatioCtrl; onChanged = _onRhoRatioChanged; break;
+                  case _ActiveField.aRatio: ctrl = _aRatioCtrl; onChanged = _onARatioChanged; break;
+                  default: break;
+                }
+                if (ctrl != null && onChanged != null) {
+                  final val = _evalExpr(ctrl.text);
+                  if (val != null && val != 0) {
+                    final invertedText = _fmt(1.0 / val);
+                    ctrl.text = invertedText;
+                    onChanged(invertedText);
+                  }
+                }
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: _inverseRatio ? _C.toggleActive : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.swap_horiz,
+                    size: 14,
+                    color: _inverseRatio ? Colors.white : _C.labelMedium,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Reciprocal',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: _inverseRatio ? Colors.white : _C.labelMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       children: [
         // ── Mach number ────────────────────────────────────────────────────
         _flowField(
@@ -1116,103 +1284,109 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
           symbol: 'M',
           controller: _machCtrl,
           focusNode: _machFocus,
-          hintText: 'Enter M (≥ 0)',
-          subHint: 'Any non-negative value',
+          hintText: 'Any non-negative value',
           onChanged: _onMachChanged,
           error: _fieldErrors[_ActiveField.mach],
         ),
 
         _divider(),
 
-        // ── T/T₀ ──────────────────────────────────────────────────────────
+        // ── T/T₀ (or T₀/T) ────────────────────────────────────────────────
         _flowField(
           field: _ActiveField.tRatio,
           label: 'Temperature Ratio',
-          symbol: 'T/T₀',
+          symbol: tSym,
           controller: _tRatioCtrl,
           focusNode: _tRatioFocus,
-          hintText: 'Enter T/T₀',
-          subHint: 'Between 0 and 1',
+          hintText: tHint,
           onChanged: _onTRatioChanged,
           error: _fieldErrors[_ActiveField.tRatio],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'T/T₀ = ${_fmt(r.tRatio)}',
-                  label1: 'T  =',
-                  label2: 'T₀ =',
-                  ratio: r.tRatio,
+                  title: '$tSym = ${_tRatioCtrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'T/T₀ = ${_fmt(r!.tRatio)}'
+                      : 'T₀/T = ${_fmt(1.0 / r!.tRatio)}',
+                  label1: _inverseRatio ? 'T₀ =' : 'T  =',
+                  label2: _inverseRatio ? 'T  =' : 'T₀ =',
+                  ratio: _inverseRatio ? 1.0 / r!.tRatio : r!.tRatio,
                 )
               : null,
         ),
 
         _divider(),
 
-        // ── P/P₀ ──────────────────────────────────────────────────────────
+        // ── P/P₀ (or P₀/P) ────────────────────────────────────────────────
         _flowField(
           field: _ActiveField.pRatio,
           label: 'Pressure Ratio',
-          symbol: 'P/P₀',
+          symbol: pSym,
           controller: _pRatioCtrl,
           focusNode: _pRatioFocus,
-          hintText: 'Enter P/P₀',
-          subHint: 'Between 0 and 1',
+          hintText: pHint,
           onChanged: _onPRatioChanged,
           error: _fieldErrors[_ActiveField.pRatio],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'P/P₀ = ${_fmt(r.pRatio)}',
-                  label1: 'P  =',
-                  label2: 'P₀ =',
-                  ratio: r.pRatio,
+                  title: '$pSym = ${_pRatioCtrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'P/P₀ = ${_fmt(r!.pRatio)}'
+                      : 'P₀/P = ${_fmt(1.0 / r!.pRatio)}',
+                  label1: _inverseRatio ? 'P₀ =' : 'P  =',
+                  label2: _inverseRatio ? 'P  =' : 'P₀ =',
+                  ratio: _inverseRatio ? 1.0 / r!.pRatio : r!.pRatio,
                 )
               : null,
         ),
 
         _divider(),
 
-        // ── ρ/ρ₀ ──────────────────────────────────────────────────────────
+        // ── ρ/ρ₀ (or ρ₀/ρ) ────────────────────────────────────────────────
         _flowField(
           field: _ActiveField.rhoRatio,
           label: 'Density Ratio',
-          symbol: 'ρ/ρ₀',
+          symbol: rhoSym,
           controller: _rhoRatioCtrl,
           focusNode: _rhoRatioFocus,
-          hintText: 'Enter ρ/ρ₀',
-          subHint: 'Between 0 and 1',
+          hintText: rhoHint,
           onChanged: _onRhoRatioChanged,
           error: _fieldErrors[_ActiveField.rhoRatio],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'ρ/ρ₀ = ${_fmt(r.rhoRatio)}',
-                  label1: 'ρ  =',
-                  label2: 'ρ₀ =',
-                  ratio: r.rhoRatio,
+                  title: '$rhoSym = ${_rhoRatioCtrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'ρ/ρ₀ = ${_fmt(r!.rhoRatio)}'
+                      : 'ρ₀/ρ = ${_fmt(1.0 / r!.rhoRatio)}',
+                  label1: _inverseRatio ? 'ρ₀ =' : 'ρ  =',
+                  label2: _inverseRatio ? 'ρ  =' : 'ρ₀ =',
+                  ratio: _inverseRatio ? 1.0 / r!.rhoRatio : r!.rhoRatio,
                 )
               : null,
         ),
 
         _divider(),
 
-        // ── A/A* with subsonic/supersonic toggle ──────────────────────────
+        // ── A/A* (or A*/A) with subsonic/supersonic toggle ─────────────────
         _flowField(
           field: _ActiveField.aRatio,
           label: 'Area Ratio',
-          symbol: 'A/A*',
+          symbol: aSym,
           controller: _aRatioCtrl,
           focusNode: _aRatioFocus,
-          hintText: 'Enter A/A* (≥ 1)',
-          subHint: 'Must be ≥ 1',
+          hintText: aHint,
           onChanged: _onARatioChanged,
           error: _fieldErrors[_ActiveField.aRatio],
-          onLabelTap: hasResult
+          onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: 'A/A* = ${_fmt(r.aRatio)}',
-                  label1: 'A  =',
-                  label2: 'A* =',
-                  ratio: r.aRatio,
+                  title: '$aSym = ${_aRatioCtrl.text}',
+                  inverseTitle: _inverseRatio
+                      ? 'A/A* = ${_fmt(r!.aRatio)}'
+                      : 'A*/A = ${_fmt(1.0 / r!.aRatio)}',
+                  label1: _inverseRatio ? 'A* =' : 'A  =',
+                  label2: _inverseRatio ? 'A  =' : 'A* =',
+                  ratio: _inverseRatio ? 1.0 / r!.aRatio : r!.aRatio,
                 )
               : null,
-          // Always show the sub/sup toggle on the A/A* row
           trailing: _SupersonicToggle(
             isSupersonic: _isSupersonic,
             onChanged: _onToggleSupersonic,
@@ -1228,8 +1402,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
           symbol: 'μ  (°)',
           controller: _muCtrl,
           focusNode: _muFocus,
-          hintText: '0° to 90°',
-          subHint: 'Supersonic only — between 0° and 90°',
+          hintText: 'Supersonic only — 0° to 90°',
           onChanged: _onMuChanged,
           error: _fieldErrors[_ActiveField.mu],
         ),
@@ -1243,9 +1416,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
           symbol: 'ν  (°)',
           controller: _nuCtrl,
           focusNode: _nuFocus,
-          hintText: '0° to νmax',
-          subHint:
-              'Supersonic only — max = ${_fmt(IsentropicEngine.nuMax(_gamma))}°',
+          hintText: 'Supersonic only — max ${_fmt(IsentropicEngine.nuMax(_gamma))}°',
           onChanged: _onNuChanged,
           error: _fieldErrors[_ActiveField.nu],
           isLast: true,
@@ -1254,7 +1425,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     );
   }
 
-  // ── Note card ─────────────────────────────────────────────────────────────
+  // ── Note card ── (commented out; moved to info section)
+  /*
   Widget _buildNoteCard() {
     return Container(
       decoration: BoxDecoration(
@@ -1285,6 +1457,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       ),
     );
   }
+  */
 
   // ─────────────────────────────────────────────
   //  Reusable sub-builders
@@ -1294,19 +1467,19 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     return Row(
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: 24,
+          height: 24,
           decoration: const BoxDecoration(
             color: _C.headerBg,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.white, size: 17),
+          child: Icon(icon, color: Colors.white, size: 13),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Text(
           title,
           style: const TextStyle(
-            fontSize: 15,
+            fontSize: 13.5,
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -1328,9 +1501,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     required FocusNode focusNode,
     required String hintText,
     required ValueChanged<String> onChanged,
-    String? subHint,
     String? error,
-    VoidCallback? onLabelTap,
+    VoidCallback? onHandyCalc,   // renamed from onLabelTap; drives icon trigger
     Widget? trailing,
     bool isLast = false,
     bool dimmed = false,
@@ -1342,56 +1514,41 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     return Opacity(
       opacity: dimmed ? 0.45 : 1.0,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 14, 16, isLast ? 16 : 0),
+        padding: EdgeInsets.fromLTRB(14, 8, 14, isLast ? 10 : 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Label row
+            // Label row — always normal color; HandyCalc is triggered via icon
             Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: onLabelTap,
-                    child: Row(
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: onLabelTap != null
-                                ? _C.headerBg
-                                : _C.fieldLabel,
-                          ),
+                  child: Row(
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _C.fieldLabel,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          symbol,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            fontStyle: FontStyle.italic,
-                            color: onLabelTap != null
-                                ? _C.headerBg
-                                : _C.fieldLabel,
-                          ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        symbol,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          fontStyle: FontStyle.italic,
+                          color: _C.fieldLabel,
                         ),
-                        if (onLabelTap != null) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.touch_app,
-                            size: 13,
-                            color: _C.headerBg,
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 if (trailing != null) trailing,
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             // Input field — style changes when computed vs active
             _buildInputField(
               controller: controller,
@@ -1401,16 +1558,11 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
               hasError: error != null,
               isComputed: isComputed,
               isActive: isActive,
+              onHandyCalc: onHandyCalc,
             ),
             if (error != null) ...[
               const SizedBox(height: 4),
               _errorText(error),
-            ] else if (subHint != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                subHint,
-                style: const TextStyle(fontSize: 11, color: _C.fieldSubHint),
-              ),
             ],
           ],
         ),
@@ -1428,10 +1580,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     bool hasError = false,
     bool isComputed = false,
     bool isActive = false,
+    VoidCallback? onHandyCalc,  // if non-null, shows compare icon in suffix
   }) {
-    // Use ListenableBuilder on the focusNode so the border reacts to focus
-    // changes without wrapping in a Focus widget (which would try to make the
-    // node a parent of itself when also passed to TextField).
     return ListenableBuilder(
       listenable: focusNode,
       builder: (_, __) {
@@ -1452,6 +1602,27 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
           bgColor = _C.fieldBg;
         }
 
+        Widget? suffix;
+        if (onHandyCalc != null) {
+          suffix = GestureDetector(
+            onTap: onHandyCalc,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Icon(
+                Icons.compare_arrows_rounded,
+                size: 18,
+                color: _C.headerBg,
+              ),
+            ),
+          );
+        } else if (isComputed) {
+          suffix = const Padding(
+            padding: EdgeInsets.only(right: 10),
+            child: Icon(Icons.lock_outline, size: 14, color: _C.labelSmall),
+          );
+        }
+
         return Container(
           key: key,
           height: 46,
@@ -1464,13 +1635,17 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
             controller: controller,
             focusNode: focusNode,
             onChanged: onChanged,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-              signed: false,
-            ),
+            // password keyboard gives access to all arithmetic operators with numbers on top/near
+            keyboardType: TextInputType.visiblePassword,
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
+                return newValue.copyWith(text: text);
+              }),
             ],
+            autocorrect: false,
+            enableSuggestions: false,
             style: TextStyle(
               fontSize: 14,
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
@@ -1485,23 +1660,14 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
-              suffixIcon: isComputed
-                  ? const Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: Icon(
-                        Icons.lock_outline,
-                        size: 14,
-                        color: _C.labelSmall,
-                      ),
-                    )
-                  : null,
+              suffixIcon: suffix,
               suffixIconConstraints: const BoxConstraints(
-                minWidth: 30,
-                minHeight: 30,
+                minWidth: 34,
+                minHeight: 34,
               ),
             ),
           ),
@@ -1803,12 +1969,14 @@ class _GasDropdownButton extends StatelessWidget {
 class _HandyCalcDialog extends StatefulWidget {
   const _HandyCalcDialog({
     required this.title,
+    required this.inverseTitle,
     required this.label1,
     required this.label2,
     required this.ratio,
   });
 
   final String title;
+  final String inverseTitle;
   final String label1; // numerator label e.g. "T ="
   final String label2; // denominator label e.g. "T₀ ="
   final double ratio;
@@ -1889,14 +2057,14 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: _C.cardBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text(
-        widget.title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: _C.headerBg,
-        ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _ratioBadge(widget.title),
+          const SizedBox(width: 8),
+          _ratioBadge(widget.inverseTitle),
+        ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1904,15 +2072,15 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
         children: [
           const Text(
             'Enter either value to compute the other:',
-            style: TextStyle(fontSize: 11.5, color: _C.labelMedium),
+            style: TextStyle(fontSize: 11.0, color: _C.labelMedium),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _handyRow(widget.label1, _ctrl1, _onNumeratorChanged, _error1),
           if (_error1 != null) ...[
             const SizedBox(height: 4),
             _errorText(_error1!),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
             children: [
               const SizedBox(width: 8),
@@ -1921,13 +2089,13 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   '÷  ratio',
-                  style: TextStyle(fontSize: 10, color: _C.labelSmall),
+                  style: TextStyle(fontSize: 9, color: _C.labelSmall),
                 ),
               ),
               Expanded(child: Container(height: 1, color: _C.sectionDiv)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _handyRow(widget.label2, _ctrl2, _onDenominatorChanged, _error2),
           if (_error2 != null) ...[
             const SizedBox(height: 4),
@@ -1940,12 +2108,31 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text(
             'Done',
-            style: TextStyle(color: _C.headerBg, fontSize: 13),
+            style: TextStyle(color: _C.headerBg, fontSize: 12),
           ),
         ),
       ],
     );
   }
+
+  Widget _ratioBadge(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: _C.headerBg.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(
+        color: _C.headerBg.withValues(alpha: 0.4),
+      ),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w600,
+        color: _C.headerBg,
+      ),
+    ),
+  );
 
   Widget _errorText(String msg) => Row(
     children: [
@@ -1969,11 +2156,11 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
     return Row(
       children: [
         SizedBox(
-          width: 42,
+          width: 36,
           child: Text(
             label,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               color: _C.fieldLabel,
               fontWeight: FontWeight.w500,
             ),
@@ -1982,7 +2169,7 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
         const SizedBox(width: 8),
         Expanded(
           child: Container(
-            height: 44,
+            height: 38,
             decoration: BoxDecoration(
               color: _C.handyCalcBg,
               borderRadius: BorderRadius.circular(8),
@@ -1998,20 +2185,20 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 color: _C.textPrimary,
                 fontWeight: FontWeight.w500,
               ),
               decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                  horizontal: 10,
+                  vertical: 9,
                 ),
                 border: InputBorder.none,
                 hintText: 'Enter value',
                 hintStyle: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: _C.fieldHint,
                   fontWeight: FontWeight.w400,
                 ),
@@ -2045,7 +2232,7 @@ class _Card extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
             child: header,
           ),
           const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),

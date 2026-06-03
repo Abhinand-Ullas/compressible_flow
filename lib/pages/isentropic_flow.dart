@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/dialogs.dart';
 
 // ─────────────────────────────────────────────
 //  Colour tokens  (same palette as Standard Atmosphere page)
@@ -1112,6 +1113,14 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
               // Reset button removed — use info section
               IconButton(
                 icon: const Icon(
+                  Icons.tips_and_updates_outlined,
+                  color: Colors.yellow,
+                  size: 22,
+                ),
+                onPressed: () => _showFeaturesDialog(context),
+              ),
+              IconButton(
+                icon: const Icon(
                   Icons.info_outline,
                   color: Colors.white,
                   size: 22,
@@ -1690,49 +1699,25 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   );
 
   // ─────────────────────────────────────────────
+  //  Features dialog
+  // ─────────────────────────────────────────────
+  void _showFeaturesDialog(BuildContext context) {
+    showAppFeaturesDialog(context);
+  }
+
+  // ─────────────────────────────────────────────
   //  Info dialog
   // ─────────────────────────────────────────────
   void _showInfoDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _C.cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text(
-          'Isentropic Flow',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: _C.headerBg,
-          ),
-        ),
-        content: const Text(
-          '1. Subscript \'0\' → stagnation (total) quantity.\n'
-          '2. Superscript \'*\' → isentropic sonic throat state.\n'
-          '3. γ (gamma) is required; tap the gas button to pick a preset.\n'
-          '4. Enter any one of M, T/T₀, P/P₀, ρ/ρ₀, A/A*, μ or ν to instantly '
-          'compute all remaining properties.\n'
-          '5. For A/A*, use the Subsonic / Supersonic toggle to select '
-          'which solution branch to compute.\n'
-          '6. μ and ν are only defined for supersonic flow (M ≥ 1).\n'
-          '7. Tap any ratio label (e.g. T/T₀) to open HandyCalc for '
-          'converting between static and stagnation absolute values.',
-          style: TextStyle(
-            fontSize: 12.5,
-            height: 1.6,
-            color: Color(0xFF4B5563),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: _C.headerBg, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
+    showTopicInfoDialog(
+      context,
+      title: 'About Isentropic Flow',
+      items: const [
+        MapEntry('Stagnation Properties', 'Subscript \'0\' denotes stagnation (total) state quantities.'),
+        MapEntry('Throat Conditions', 'Superscript \'*\' denotes sonic state quantities at the throat (where Mach number = 1).'),
+        MapEntry('Core Assumptions', 'Assumes the flow is both adiabatic (no heat transfer) and reversible (no friction).'),
+        MapEntry('Supersonic Limits', 'Mach Angle (μ) and Prandtl-Meyer Function (ν) are only defined for supersonic regimes (M ≥ 1).'),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/dialogs.dart';
 
 // ─────────────────────────────────────────────
 //  Colour tokens  (same palette as Isentropic page)
@@ -1027,6 +1028,14 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
               ),
               IconButton(
                 icon: const Icon(
+                  Icons.tips_and_updates_outlined,
+                  color: Colors.yellow,
+                  size: 22,
+                ),
+                onPressed: () => _showFeaturesDialog(context),
+              ),
+              IconButton(
+                icon: const Icon(
                   Icons.info_outline,
                   color: Colors.white,
                   size: 22,
@@ -1617,45 +1626,22 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     ],
   );
 
+  // ── Features dialog ───────────────────────────────────────────────────────
+  void _showFeaturesDialog(BuildContext context) {
+    showAppFeaturesDialog(context);
+  }
+
   // ── Info dialog ───────────────────────────────────────────────────────────
   void _showInfoDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _C.cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text(
-          'Normal Shock',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: _C.headerBg,
-          ),
-        ),
-        content: const Text(
-          '1. Subscript \'1\' → state before the shock.\n'
-          '2. Subscript \'2\' → state after the shock.\n'
-          '3. Subscript \'0\' → stagnation (total) quantity.\n'
-          '4. γ (gamma) is required; tap the gas button to pick a preset.\n'
-          '5. Enter any one of M₁, M₂, T₂/T₁, P₂/P₁, ρ₂/ρ₁, P₀₂/P₀₁, P₀₂/P₁, or ΔV/a₁ to instantly compute all remaining properties.\n'
-          '6. P₀₂/P₀₁ and P₀₂/P₁ cases use Newton-Raphson iteration.\n'
-          '7. Tap any ratio label (e.g. T₂/T₁) to open HandyCalc for converting between absolute values.',
-          style: TextStyle(
-            fontSize: 12.5,
-            height: 1.6,
-            color: Color(0xFF4B5563),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: _C.headerBg, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
+    showTopicInfoDialog(
+      context,
+      title: 'About Normal Shock',
+      items: const [
+        MapEntry('State 1', 'Upstream conditions directly before the shock wave (always supersonic, M₁ > 1).'),
+        MapEntry('State 2', 'Downstream conditions directly after the shock wave (always subsonic, M₂ < 1).'),
+        MapEntry('Stagnation Pressures', 'Stagnation pressure decreases across the shock (P₀₂ < P₀₁) due to entropy increase.'),
+        MapEntry('Stagnation Temperature', 'Stagnation temperature remains constant across the shock (T₀₂ = T₀₁).'),
+      ],
     );
   }
 }

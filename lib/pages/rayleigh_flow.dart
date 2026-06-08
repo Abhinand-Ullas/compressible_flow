@@ -5,7 +5,7 @@ import '../utils/dialogs.dart';
 import '../utils/responsive.dart';
 
 // ─────────────────────────────────────────────
-//  Colour tokens (matching Isentropic / Normal Shock pages)
+//  Colour tokens (same as other pages)
 // ─────────────────────────────────────────────
 class _C {
   static const headerBg = Color(0xFF18397C);
@@ -70,12 +70,12 @@ const List<_GasEntry> _kGases = [
 // ─────────────────────────────────────────────
 //  Enum: active input field
 // ─────────────────────────────────────────────
-enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, p0Ratio, fricFact, uRatio }
+enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, t0Ratio, p0Ratio, uRatio }
 
 // ─────────────────────────────────────────────
 //  Simple arithmetic expression evaluator
 // ─────────────────────────────────────────────
-double? _evalExpr(String input) {  // the entry point of parser, handles null condition or error condition
+double? _evalExpr(String input) {
   final s = input.trim().replaceAll(' ', '');
   if (s.isEmpty) return null;
   try {
@@ -86,8 +86,8 @@ double? _evalExpr(String input) {  // the entry point of parser, handles null co
   }
 }
 
-class _ExprParser {    // the recursive descent parser for basic arithmetic expressions
-  _ExprParser(this._s); // returns the result
+class _ExprParser {
+  _ExprParser(this._s);
   final String _s;
   int _pos = 0;
 
@@ -153,172 +153,150 @@ class _ExprParser {    // the recursive descent parser for basic arithmetic expr
 }
 
 // ─────────────────────────────────────────────
-//  Calculation Engine
+//  Calculation Engine — Rayleigh Flow
 // ─────────────────────────────────────────────
-class FannoFlowEngine {
-  // ── Core helper formulas ──────────────────────────────────────────────────
-  static double ff_P0_P0star_from_M(double m, double g) {
-    return (1.0 / m) * pow((1.0 + 0.5 * (g - 1.0) * m * m) / (0.5 * (g + 1.0)), (g + 1.0) / (2.0 * (g - 1.0))).toDouble();
-  }
-
-  static double ff_fric_fact_from_M(double m, double g) {
-    final term1 = ((g + 1.0) / (2.0 * g)) * log(((g + 1.0) / 2.0) * m * m / (1.0 + 0.5 * (g - 1.0) * m * m));
-    final term2 = (1.0 / g) * (1.0 / (m * m) - 1.0);
-    return term1 + term2;
-  }
-
-  static double calculateFricFactSupMax(double g) {
-    return ((g + 1.0) / (2.0 * g)) * log((g + 1.0) / (g - 1.0)) - (1.0 / g);
-  }
-
-  // ── Core solver given Mach ────────────────────────────────────────────────
-  static FannoResult fromMach(double M, double gamma) {
+class RayleighFlowEngine {
+  // ── Forward: given M, compute all ratios ─────────────────────────────────
+  static RayleighResult fromMach(double M, double gamma) {
     final g = gamma;
-    final tRatio = ((g + 1.0) / 2.0) / (1.0 + 0.5 * (g - 1.0) * M * M);
-    final pRatio = (1.0 / M) * sqrt(tRatio);
-    final rhoRatio = (1.0 / M) * sqrt((1.0 + 0.5 * (g - 1.0) * M * M) / ((g + 1.0) / 2.0));
-    final p0Ratio = ff_P0_P0star_from_M(M, g);
-    final fricFact = ff_fric_fact_from_M(M, g);
-    final uRatio = M * sqrt(tRatio);
+    final m = M;
 
-    return FannoResult(
+    final tRatio = m * m * (1.0 + g) * (1.0 + g) / pow(1.0 + g * m * m, 2.0);
+    final pRatio = (1.0 + g) / (1.0 + g * m * m);
+    final rhoRatio = (1.0 + g * m * m) / ((1.0 + g) * m * m);
+    final t0Ratio = 2.0 * (1.0 + g) * m * m / pow(1.0 + g * m * m, 2.0) *
+        (1.0 + (g - 1.0) / 2.0 * m * m);
+    final p0Ratio = (1.0 + g) / (1.0 + g * m * m) *
+        pow((1.0 + (g - 1.0) / 2.0 * m * m) / ((g + 1.0) / 2.0), g / (g - 1.0));
+    final uRatio = (1.0 + g) * m * m / (1.0 + g * m * m);
+
+    return RayleighResult(
       M: M,
-      tRatio: tRatio,
+      tRatio: tRatio.toDouble(),
       pRatio: pRatio,
       rhoRatio: rhoRatio,
-      p0Ratio: p0Ratio,
-      fricFact: fricFact,
+      t0Ratio: t0Ratio.toDouble(),
+      p0Ratio: p0Ratio.toDouble(),
       uRatio: uRatio,
     );
   }
 
-  // ── Inverse solvers ────────────────────────────────────────────────────────
-  static double machFromTRatio(double tRatio, double gamma) {
-    return sqrt((gamma + 1.0 - 2.0 * tRatio) / (tRatio * (gamma - 1.0)));
+  // ── Limit helpers ─────────────────────────────────────────────────────────
+  static double tRatioMax(double g) => pow(1.0 + g, 2.0) / (4.0 * g);
+  static double pRatioMax(double g) => (1.0 + g) / 2.0;
+  static double rhoRatioMin(double g) => g / (1.0 + g);
+  static double t0RatioMinSup(double g) => 1.0 - 1.0 / (g * g);
+  static double p0RatioMaxSub(double g) =>
+      (g + 1.0) * pow(2.0 / (g + 1.0), g / (g - 1.0));
+  static double uRatioMax(double g) => (1.0 + g) / g;
+
+  // ── Inverse: M from T/T* ─────────────────────────────────────────────────
+  // T/T* = M²(1+γ)²/(1+γM²)²  → two solutions split at M=1/√γ
+  // Using closed-form from Java (quadratic solution from paper):
+  static double machFromTRatio(double tRatio, double gamma, {required bool aboveTmax}) {
+    final v = tRatio;
+    final g = gamma;
+    final aa = sqrt(1.0 - 4.0 * v * g - 8.0 * v * g * g - 4.0 * v * pow(g, 3.0) +
+        4.0 * g + 6.0 * g * g + 4.0 * pow(g, 3.0) + pow(g, 4.0));
+    double M;
+    if (aboveTmax) {
+      // M > 1/√γ  (supersonic or high-subsonic branch)
+      M = sqrt(-2.0 * v * (2.0 * v * g - 1.0 - 2.0 * g - g * g - aa)) / (2.0 * v * g);
+    } else {
+      // M < 1/√γ  (low-subsonic branch)
+      M = sqrt(-2.0 * v * (2.0 * v * g - 1.0 - 2.0 * g - g * g + aa)) / (2.0 * v * g);
+    }
+    return M.abs();
   }
 
+  // ── Inverse: M from P/P* ─────────────────────────────────────────────────
+  // P/P* = (1+γ)/(1+γM²)  → single solution
   static double machFromPRatio(double pRatio, double gamma) {
-    final g = gamma;
     final p = pRatio;
-    return sqrt((sqrt(p * p + g * g - 1.0) - p) / (p * (g - 1.0)));
+    final g = gamma;
+    return sqrt(p * g * (1.0 + g - p)) / (p * g);
   }
 
+  // ── Inverse: M from ρ/ρ* ─────────────────────────────────────────────────
+  // ρ/ρ* = (1+γM²)/((1+γ)M²) → single solution
   static double machFromRhoRatio(double rhoRatio, double gamma) {
+    final r = rhoRatio;
     final g = gamma;
-    final rho = rhoRatio;
-    final term = 0.5 * (g + 1.0) * rho * rho - 0.5 * (g - 1.0);
-    return sqrt(1.0 / term);
+    return sqrt(1.0 / (r + g * r - g));
   }
 
-  static double machFromURatio(double uRatio, double gamma) {
+  // ── Inverse: M from T₀/T₀* ─────────────────────────────────────────────
+  // Two solutions; use supersonic flag. Closed-form from Java:
+  static double machFromT0Ratio(double t0Ratio, double gamma, {required bool supersonic}) {
+    final v = t0Ratio;
     final g = gamma;
-    final u = uRatio;
-    final term = 2.0 * (g + 1.0) - 2.0 * (g - 1.0) * u * u;
-    return (2.0 * u) / sqrt(term);
+    final inner = sqrt(-2.0 * v * g - v * g * g + 1.0 + 2.0 * g + g * g - v);
+    double M;
+    if (supersonic) {
+      M = sqrt(-(v * g * g + 1.0 - g * g) * (v * g - 1.0 - g - inner)) /
+          (v * g * g + 1.0 - g * g);
+    } else {
+      M = sqrt(-(v * g * g + 1.0 - g * g) * (v * g - 1.0 - g + inner)) /
+          (v * g * g + 1.0 - g * g);
+    }
+    return M.abs();
+  }
+
+  // ── Inverse: M from P₀/P₀* — bisection (same structure as Java) ──────────
+  static double p0RatioFromM(double m, double g) {
+    return (1.0 + g) / (1.0 + g * m * m) *
+        pow((1.0 + (g - 1.0) / 2.0 * m * m) / ((g + 1.0) / 2.0), g / (g - 1.0));
   }
 
   static double machFromP0Ratio(double p0Ratio, double gamma, {required bool supersonic}) {
     final g = gamma;
     final v = p0Ratio;
-    double xlo = supersonic ? 1.0 : 1e-8;
+    double xlo = supersonic ? 1.0 : 1e-9;
     double xhi = supersonic ? 100.0 : 1.0;
-
-    if (supersonic) {
-      while (ff_P0_P0star_from_M(xhi, g) < v) {
-        xhi *= 2.0;
-        if (xhi > 1e6) break;
-      }
-    }
-
     double x = 0;
-    double y = 0;
-    int iter = 0;
-    while (iter < 100) {
+    for (int i = 0; i < 200; i++) {
       x = (xlo + xhi) / 2.0;
-      y = ff_P0_P0star_from_M(x, g);
-      if ((xhi - xlo).abs() < 1e-9) break;
-
+      final y = p0RatioFromM(x, g);
+      if ((xhi - xlo).abs() < 1e-10) break;
       if (supersonic) {
-        if (y > v) {
-          xhi = x;
-        } else {
-          xlo = x;
-        }
+        if (y > v) xhi = x; else xlo = x;
       } else {
-        if (y > v) {
-          xlo = x;
-        } else {
-          xhi = x;
-        }
+        if (y > v) xlo = x; else xhi = x;
       }
-      iter++;
     }
     return x;
   }
 
-  static double machFromFricFact(double fricFact, double gamma, {required bool supersonic}) {
+  // ── Inverse: M from U/U* ─────────────────────────────────────────────────
+  // U/U* = (1+γ)M²/(1+γM²) → single solution
+  static double machFromURatio(double uRatio, double gamma) {
+    final u = uRatio;
     final g = gamma;
-    final v = fricFact;
-    double xlo = supersonic ? 1.0 : 1e-8;
-    double xhi = supersonic ? 100.0 : 1.0;
-
-    if (supersonic) {
-      final limit = calculateFricFactSupMax(g);
-      if (v >= limit) {
-        return 1e6; // very large mach
-      }
-      while (ff_fric_fact_from_M(xhi, g) < v) {
-        xhi *= 2.0;
-        if (xhi > 1e6) break;
-      }
-    }
-
-    double x = 0;
-    double y = 0;
-    int iter = 0;
-    while (iter < 100) {
-      x = (xlo + xhi) / 2.0;
-      y = ff_fric_fact_from_M(x, g);
-      if ((xhi - xlo).abs() < 1e-9) break;
-
-      if (supersonic) {
-        if (y > v) {
-          xhi = x;
-        } else {
-          xlo = x;
-        }
-      } else {
-        if (y > v) {
-          xlo = x;
-        } else {
-          xhi = x;
-        }
-      }
-      iter++;
-    }
-    return x;
+    // Rearranging: (1+γ)M² = u(1+γM²)  => M²[(1+γ)-uγ] = u => M² = u/((1+γ)-uγ)
+    final denom = (1.0 + g) - u * g;
+    return sqrt(u / denom);
   }
 }
 
 // ─────────────────────────────────────────────
-//  Result Model
+//  Result model
 // ─────────────────────────────────────────────
-class FannoResult {
+class RayleighResult {
   final double M;
   final double tRatio;
   final double pRatio;
   final double rhoRatio;
+  final double t0Ratio;
   final double p0Ratio;
-  final double fricFact;
   final double uRatio;
 
-  const FannoResult({
+  const RayleighResult({
     required this.M,
     required this.tRatio,
     required this.pRatio,
     required this.rhoRatio,
+    required this.t0Ratio,
     required this.p0Ratio,
-    required this.fricFact,
     required this.uRatio,
   });
 }
@@ -326,23 +304,23 @@ class FannoResult {
 // ─────────────────────────────────────────────
 //  Main Screen Widget
 // ─────────────────────────────────────────────
-class FannoFlowScreen extends StatefulWidget {
+class RayleighFlowScreen extends StatefulWidget {
   final VoidCallback? onDrawer;
-  const FannoFlowScreen({super.key, this.onDrawer});
+  const RayleighFlowScreen({super.key, this.onDrawer});
 
   @override
-  State<FannoFlowScreen> createState() => _FannoFlowScreenState();
+  State<RayleighFlowScreen> createState() => _RayleighFlowScreenState();
 }
 
-class _FannoFlowScreenState extends State<FannoFlowScreen> {
+class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
   // ── Controllers ────────────────────────────────────────────────────────────
   final _gammaCtrl = TextEditingController();
   final _machCtrl = TextEditingController();
   final _tRatioCtrl = TextEditingController();
   final _pRatioCtrl = TextEditingController();
   final _rhoRatioCtrl = TextEditingController();
+  final _t0RatioCtrl = TextEditingController();
   final _p0RatioCtrl = TextEditingController();
-  final _fricFactCtrl = TextEditingController();
   final _uRatioCtrl = TextEditingController();
 
   // ── Focus nodes ───────────────────────────────────────────────────────────
@@ -351,8 +329,8 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   final _tRatioFocus = FocusNode();
   final _pRatioFocus = FocusNode();
   final _rhoRatioFocus = FocusNode();
+  final _t0RatioFocus = FocusNode();
   final _p0RatioFocus = FocusNode();
-  final _fricFactFocus = FocusNode();
   final _uRatioFocus = FocusNode();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -361,18 +339,24 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   String? _gammaError;
 
   _ActiveField _activeField = _ActiveField.none;
-  FannoResult? _result;
+  RayleighResult? _result;
 
   final Map<_ActiveField, String?> _fieldErrors = {};
   String _selectedGasName = 'Air';
   bool _updating = false;
 
+  // T/T* has two branches split at M=1/√γ
+  bool _isTAboveTmax = false;
+  // T₀/T₀* two branches
+  bool _isT0Supersonic = false;
+  // P₀/P₀* two branches
   bool _isP0Supersonic = false;
-  bool _isFricSupersonic = false;
-  bool _inverseRatio = false;
 
-  bool _togglingP0Supersonic = false;
-  bool _togglingFricSupersonic = false;
+  bool _togglingT = false;
+  bool _togglingT0 = false;
+  bool _togglingP0 = false;
+
+  bool _inverseRatio = false;
 
   final _gammaKey = GlobalKey();
 
@@ -393,37 +377,21 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     onFocusChange(_ActiveField.tRatio, _tRatioFocus);
     onFocusChange(_ActiveField.pRatio, _pRatioFocus);
     onFocusChange(_ActiveField.rhoRatio, _rhoRatioFocus);
+    onFocusChange(_ActiveField.t0Ratio, _t0RatioFocus);
     onFocusChange(_ActiveField.p0Ratio, _p0RatioFocus);
-    onFocusChange(_ActiveField.fricFact, _fricFactFocus);
     onFocusChange(_ActiveField.uRatio, _uRatioFocus);
   }
 
   @override
   void dispose() {
     for (final c in [
-      _gammaCtrl,
-      _machCtrl,
-      _tRatioCtrl,
-      _pRatioCtrl,
-      _rhoRatioCtrl,
-      _p0RatioCtrl,
-      _fricFactCtrl,
-      _uRatioCtrl,
-    ]) {
-      c.dispose();
-    }
+      _gammaCtrl, _machCtrl, _tRatioCtrl, _pRatioCtrl,
+      _rhoRatioCtrl, _t0RatioCtrl, _p0RatioCtrl, _uRatioCtrl,
+    ]) { c.dispose(); }
     for (final f in [
-      _gammaFocus,
-      _machFocus,
-      _tRatioFocus,
-      _pRatioFocus,
-      _rhoRatioFocus,
-      _p0RatioFocus,
-      _fricFactFocus,
-      _uRatioFocus,
-    ]) {
-      f.dispose();
-    }
+      _gammaFocus, _machFocus, _tRatioFocus, _pRatioFocus,
+      _rhoRatioFocus, _t0RatioFocus, _p0RatioFocus, _uRatioFocus,
+    ]) { f.dispose(); }
     super.dispose();
   }
 
@@ -434,34 +402,20 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
-      setState(() {
-        _gammaValid = false;
-        _gammaError = 'γ is required';
-        _result = null;
-      });
+      setState(() { _gammaValid = false; _gammaError = 'γ is required'; _result = null; });
       return;
     }
     final val = _evalExpr(trimmed);
     if (val == null) {
-      setState(() {
-        _gammaValid = false;
-        _gammaError = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _gammaValid = false; _gammaError = 'Invalid expression'; _result = null; });
       return;
     }
     if (val <= 1.0) {
-      setState(() {
-        _gammaValid = false;
-        _gammaError = 'γ must be greater than 1';
-        _result = null;
-      });
+      setState(() { _gammaValid = false; _gammaError = 'γ must be greater than 1'; _result = null; });
       return;
     }
     _gamma = val;
-    final match = _kGases
-        .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
-        .firstOrNull;
+    final match = _kGases.where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9).firstOrNull;
     setState(() {
       _gammaValid = true;
       _gammaError = null;
@@ -483,27 +437,18 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.mach);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.mach] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.mach] = null; _result = null; });
       _clearComputedFields(_ActiveField.mach);
       return;
     }
     final val = _evalExpr(trimmed);
     if (val == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.mach] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.mach] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.mach);
       return;
     }
     if (val <= 0.0) {
-      setState(() {
-        _fieldErrors[_ActiveField.mach] = 'Mach number must be > 0';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.mach] = 'Mach number must be > 0'; _result = null; });
       _clearComputedFields(_ActiveField.mach);
       return;
     }
@@ -521,29 +466,23 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.tRatio);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.tRatio] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.tRatio] = null; _result = null; });
       _clearComputedFields(_ActiveField.tRatio);
       return;
     }
     final rawVal = _evalExpr(trimmed);
     if (rawVal == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.tRatio] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.tRatio] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.tRatio);
       return;
     }
     final val = _inverseRatio ? 1.0 / rawVal : rawVal;
-    final maxTRatio = (_gamma + 1.0) / 2.0;
-    if (val <= 0.0 || val >= maxTRatio) {
+    final maxT = RayleighFlowEngine.tRatioMax(_gamma);
+    if (val <= 0.0 || val >= maxT) {
       setState(() {
         _fieldErrors[_ActiveField.tRatio] = _inverseRatio
-            ? 'T*/T must be greater than ${_fmt(1.0 / maxTRatio)}'
-            : 'T/T* must be between 0 and ${_fmt(maxTRatio)}';
+            ? 'T*/T must be greater than ${_fmt(1.0 / maxT)}'
+            : 'T/T* must be between 0 and ${_fmt(maxT)}';
         _result = null;
       });
       _clearComputedFields(_ActiveField.tRatio);
@@ -554,7 +493,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
       return;
     }
     setState(() => _fieldErrors[_ActiveField.tRatio] = null);
-    final M = FannoFlowEngine.machFromTRatio(val, _gamma);
+    final M = RayleighFlowEngine.machFromTRatio(val, _gamma, aboveTmax: _isTAboveTmax);
     _computeFromMach(M);
   }
 
@@ -564,28 +503,23 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.pRatio);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.pRatio] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.pRatio] = null; _result = null; });
       _clearComputedFields(_ActiveField.pRatio);
       return;
     }
     final rawVal = _evalExpr(trimmed);
     if (rawVal == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.pRatio] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.pRatio] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.pRatio);
       return;
     }
     final val = _inverseRatio ? 1.0 / rawVal : rawVal;
-    if (val <= 0.0) {
+    final maxP = RayleighFlowEngine.pRatioMax(_gamma);
+    if (val <= 0.0 || val >= maxP) {
       setState(() {
         _fieldErrors[_ActiveField.pRatio] = _inverseRatio
-            ? 'P*/P must be > 0'
-            : 'P/P* must be > 0';
+            ? 'P*/P must be greater than ${_fmt(1.0 / maxP)}'
+            : 'P/P* must be between 0 and ${_fmt(maxP)}';
         _result = null;
       });
       _clearComputedFields(_ActiveField.pRatio);
@@ -596,7 +530,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
       return;
     }
     setState(() => _fieldErrors[_ActiveField.pRatio] = null);
-    final M = FannoFlowEngine.machFromPRatio(val, _gamma);
+    final M = RayleighFlowEngine.machFromPRatio(val, _gamma);
     _computeFromMach(M);
   }
 
@@ -606,24 +540,18 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.rhoRatio);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.rhoRatio] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.rhoRatio] = null; _result = null; });
       _clearComputedFields(_ActiveField.rhoRatio);
       return;
     }
     final rawVal = _evalExpr(trimmed);
     if (rawVal == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.rhoRatio] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.rhoRatio] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.rhoRatio);
       return;
     }
     final val = _inverseRatio ? 1.0 / rawVal : rawVal;
-    final minRho = sqrt((_gamma - 1.0) / (_gamma + 1.0));
+    final minRho = RayleighFlowEngine.rhoRatioMin(_gamma);
     if (val <= minRho) {
       setState(() {
         _fieldErrors[_ActiveField.rhoRatio] = _inverseRatio
@@ -639,7 +567,54 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
       return;
     }
     setState(() => _fieldErrors[_ActiveField.rhoRatio] = null);
-    final M = FannoFlowEngine.machFromRhoRatio(val, _gamma);
+    final M = RayleighFlowEngine.machFromRhoRatio(val, _gamma);
+    _computeFromMach(M);
+  }
+
+  void _onT0RatioChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.t0Ratio;
+    _clearOtherErrors(_ActiveField.t0Ratio);
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() { _fieldErrors[_ActiveField.t0Ratio] = null; _result = null; });
+      _clearComputedFields(_ActiveField.t0Ratio);
+      return;
+    }
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
+      setState(() { _fieldErrors[_ActiveField.t0Ratio] = 'Invalid expression'; _result = null; });
+      _clearComputedFields(_ActiveField.t0Ratio);
+      return;
+    }
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+    final minSup = RayleighFlowEngine.t0RatioMinSup(_gamma);
+    if (val <= 0.0 || val >= 1.0) {
+      setState(() {
+        _fieldErrors[_ActiveField.t0Ratio] = _inverseRatio
+            ? 'T₀*/T₀ must be between 0 and 1'
+            : 'T₀/T₀* must be between 0 and 1';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.t0Ratio);
+      return;
+    }
+    if (_isT0Supersonic && val <= minSup) {
+      setState(() {
+        _fieldErrors[_ActiveField.t0Ratio] = _inverseRatio
+            ? 'T₀*/T₀ must be less than ${_fmt(1.0 / minSup)} for supersonic'
+            : 'T₀/T₀* must be greater than ${_fmt(minSup)} for supersonic';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.t0Ratio);
+      return;
+    }
+    if (!_gammaValid) {
+      setState(() => _fieldErrors[_ActiveField.t0Ratio] = 'Enter a valid γ first');
+      return;
+    }
+    setState(() => _fieldErrors[_ActiveField.t0Ratio] = null);
+    final M = RayleighFlowEngine.machFromT0Ratio(val, _gamma, supersonic: _isT0Supersonic);
     _computeFromMach(M);
   }
 
@@ -649,87 +624,47 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.p0Ratio);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.p0Ratio] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.p0Ratio] = null; _result = null; });
       _clearComputedFields(_ActiveField.p0Ratio);
       return;
     }
     final rawVal = _evalExpr(trimmed);
     if (rawVal == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.p0Ratio] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.p0Ratio] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.p0Ratio);
       return;
     }
     final val = _inverseRatio ? 1.0 / rawVal : rawVal;
-    if (val < 1.0) {
-      setState(() {
-        _fieldErrors[_ActiveField.p0Ratio] = _inverseRatio
-            ? 'P₀*/P₀ must be between 0 and 1'
-            : 'P₀/P₀* must be ≥ 1';
-        _result = null;
-      });
-      _clearComputedFields(_ActiveField.p0Ratio);
-      return;
+    final maxSub = RayleighFlowEngine.p0RatioMaxSub(_gamma);
+    if (_isP0Supersonic) {
+      if (val < 1.0) {
+        setState(() {
+          _fieldErrors[_ActiveField.p0Ratio] = _inverseRatio
+              ? 'P₀*/P₀ must be ≤ 1'
+              : 'P₀/P₀* must be ≥ 1';
+          _result = null;
+        });
+        _clearComputedFields(_ActiveField.p0Ratio);
+        return;
+      }
+    } else {
+      if (val <= 1.0 || val >= maxSub) {
+        setState(() {
+          _fieldErrors[_ActiveField.p0Ratio] = _inverseRatio
+              ? 'P₀*/P₀ must be between ${_fmt(1.0 / maxSub)} and 1'
+              : 'P₀/P₀* must be between 1 and ${_fmt(maxSub)}';
+          _result = null;
+        });
+        _clearComputedFields(_ActiveField.p0Ratio);
+        return;
+      }
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.p0Ratio] = 'Enter a valid γ first');
       return;
     }
     setState(() => _fieldErrors[_ActiveField.p0Ratio] = null);
-    final M = FannoFlowEngine.machFromP0Ratio(val, _gamma, supersonic: _isP0Supersonic);
-    _computeFromMach(M);
-  }
-
-  void _onFricFactChanged(String raw) {
-    if (_updating) return;
-    _activeField = _ActiveField.fricFact;
-    _clearOtherErrors(_ActiveField.fricFact);
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.fricFact] = null;
-        _result = null;
-      });
-      _clearComputedFields(_ActiveField.fricFact);
-      return;
-    }
-    final val = _evalExpr(trimmed);
-    if (val == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.fricFact] = 'Invalid expression';
-        _result = null;
-      });
-      _clearComputedFields(_ActiveField.fricFact);
-      return;
-    }
-    if (val <= 0.0) {
-      setState(() {
-        _fieldErrors[_ActiveField.fricFact] = '4fL*/D must be > 0';
-        _result = null;
-      });
-      _clearComputedFields(_ActiveField.fricFact);
-      return;
-    }
-    if (!_gammaValid) {
-      setState(() => _fieldErrors[_ActiveField.fricFact] = 'Enter a valid γ first');
-      return;
-    }
-    final maxFric = FannoFlowEngine.calculateFricFactSupMax(_gamma);
-    if (_isFricSupersonic && val >= maxFric) {
-      setState(() {
-        _fieldErrors[_ActiveField.fricFact] = '4fL*/D must be between 0 and ${_fmt(maxFric)} for supersonic';
-        _result = null;
-      });
-      _clearComputedFields(_ActiveField.fricFact);
-      return;
-    }
-    setState(() => _fieldErrors[_ActiveField.fricFact] = null);
-    final M = FannoFlowEngine.machFromFricFact(val, _gamma, supersonic: _isFricSupersonic);
+    final M = RayleighFlowEngine.machFromP0Ratio(val, _gamma, supersonic: _isP0Supersonic);
     _computeFromMach(M);
   }
 
@@ -739,29 +674,23 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     _clearOtherErrors(_ActiveField.uRatio);
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
-      setState(() {
-        _fieldErrors[_ActiveField.uRatio] = null;
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.uRatio] = null; _result = null; });
       _clearComputedFields(_ActiveField.uRatio);
       return;
     }
     final rawVal = _evalExpr(trimmed);
     if (rawVal == null) {
-      setState(() {
-        _fieldErrors[_ActiveField.uRatio] = 'Invalid expression';
-        _result = null;
-      });
+      setState(() { _fieldErrors[_ActiveField.uRatio] = 'Invalid expression'; _result = null; });
       _clearComputedFields(_ActiveField.uRatio);
       return;
     }
     final val = _inverseRatio ? 1.0 / rawVal : rawVal;
-    final maxURatio = sqrt((_gamma + 1.0) / (_gamma - 1.0));
-    if (val <= 0.0 || val >= maxURatio) {
+    final maxU = RayleighFlowEngine.uRatioMax(_gamma);
+    if (val <= 0.0 || val >= maxU) {
       setState(() {
         _fieldErrors[_ActiveField.uRatio] = _inverseRatio
-            ? 'U*/U must be greater than ${_fmt(1.0 / maxURatio)}'
-            : 'U/U* must be between 0 and ${_fmt(maxURatio)}';
+            ? 'U*/U must be greater than ${_fmt(1.0 / maxU)}'
+            : 'U/U* must be between 0 and ${_fmt(maxU)}';
         _result = null;
       });
       _clearComputedFields(_ActiveField.uRatio);
@@ -772,7 +701,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
       return;
     }
     setState(() => _fieldErrors[_ActiveField.uRatio] = null);
-    final M = FannoFlowEngine.machFromURatio(val, _gamma);
+    final M = RayleighFlowEngine.machFromURatio(val, _gamma);
     _computeFromMach(M);
   }
 
@@ -780,15 +709,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   //  Core compute dispatcher
   // ─────────────────────────────────────────────
   void _computeFromMach(double M) {
-    final result = FannoFlowEngine.fromMach(M, _gamma);
+    final result = RayleighFlowEngine.fromMach(M, _gamma);
+    final mAtTmax = 1.0 / sqrt(_gamma);
 
-    // Sync switches programmatically if not manually toggled
-    if (!_togglingP0Supersonic) {
-      _isP0Supersonic = M >= 1.0;
-    }
-    if (!_togglingFricSupersonic) {
-      _isFricSupersonic = M >= 1.0;
-    }
+    if (!_togglingT) _isTAboveTmax = M > mAtTmax;
+    if (!_togglingT0) _isT0Supersonic = M >= 1.0;
+    if (!_togglingP0) _isP0Supersonic = M >= 1.0;
 
     setState(() => _result = result);
     _writeComputedFields();
@@ -797,39 +723,23 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   void _recalculate() {
     if (_activeField == _ActiveField.none) return;
     switch (_activeField) {
-      case _ActiveField.mach:
-        _onMachChanged(_machCtrl.text);
-      case _ActiveField.tRatio:
-        _onTRatioChanged(_tRatioCtrl.text);
-      case _ActiveField.pRatio:
-        _onPRatioChanged(_pRatioCtrl.text);
-      case _ActiveField.rhoRatio:
-        _onRhoRatioChanged(_rhoRatioCtrl.text);
-      case _ActiveField.p0Ratio:
-        _onP0RatioChanged(_p0RatioCtrl.text);
-      case _ActiveField.fricFact:
-        _onFricFactChanged(_fricFactCtrl.text);
-      case _ActiveField.uRatio:
-        _onURatioChanged(_uRatioCtrl.text);
-      case _ActiveField.none:
-        break;
+      case _ActiveField.mach: _onMachChanged(_machCtrl.text);
+      case _ActiveField.tRatio: _onTRatioChanged(_tRatioCtrl.text);
+      case _ActiveField.pRatio: _onPRatioChanged(_pRatioCtrl.text);
+      case _ActiveField.rhoRatio: _onRhoRatioChanged(_rhoRatioCtrl.text);
+      case _ActiveField.t0Ratio: _onT0RatioChanged(_t0RatioCtrl.text);
+      case _ActiveField.p0Ratio: _onP0RatioChanged(_p0RatioCtrl.text);
+      case _ActiveField.uRatio: _onURatioChanged(_uRatioCtrl.text);
+      case _ActiveField.none: break;
     }
   }
 
   void _writeComputedFields() {
     if (_result == null) return;
     _updating = true;
-
-    void setIfNotActive(
-      _ActiveField field,
-      TextEditingController ctrl,
-      String Function() value,
-    ) {
-      if (_activeField != field) {
-        ctrl.text = value();
-      }
+    void setIfNotActive(_ActiveField field, TextEditingController ctrl, String Function() value) {
+      if (_activeField != field) ctrl.text = value();
     }
-
     final r = _result!;
     setIfNotActive(_ActiveField.mach, _machCtrl, () => _fmt(r.M));
     setIfNotActive(_ActiveField.tRatio, _tRatioCtrl,
@@ -838,12 +748,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
         () => _inverseRatio ? _fmt(1.0 / r.pRatio) : _fmt(r.pRatio));
     setIfNotActive(_ActiveField.rhoRatio, _rhoRatioCtrl,
         () => _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio));
+    setIfNotActive(_ActiveField.t0Ratio, _t0RatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.t0Ratio) : _fmt(r.t0Ratio));
     setIfNotActive(_ActiveField.p0Ratio, _p0RatioCtrl,
         () => _inverseRatio ? _fmt(1.0 / r.p0Ratio) : _fmt(r.p0Ratio));
-    setIfNotActive(_ActiveField.fricFact, _fricFactCtrl, () => _fmt(r.fricFact));
     setIfNotActive(_ActiveField.uRatio, _uRatioCtrl,
         () => _inverseRatio ? _fmt(1.0 / r.uRatio) : _fmt(r.uRatio));
-
     _updating = false;
   }
 
@@ -852,13 +762,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     void clearIfNotActive(_ActiveField field, TextEditingController ctrl) {
       if (field != keepField) ctrl.clear();
     }
-
     clearIfNotActive(_ActiveField.mach, _machCtrl);
     clearIfNotActive(_ActiveField.tRatio, _tRatioCtrl);
     clearIfNotActive(_ActiveField.pRatio, _pRatioCtrl);
     clearIfNotActive(_ActiveField.rhoRatio, _rhoRatioCtrl);
+    clearIfNotActive(_ActiveField.t0Ratio, _t0RatioCtrl);
     clearIfNotActive(_ActiveField.p0Ratio, _p0RatioCtrl);
-    clearIfNotActive(_ActiveField.fricFact, _fricFactCtrl);
     clearIfNotActive(_ActiveField.uRatio, _uRatioCtrl);
     _updating = false;
   }
@@ -870,34 +779,30 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   }
 
   // ─────────────────────────────────────────────
-  //  Supersonic Toggles
+  //  Toggle handlers
   // ─────────────────────────────────────────────
-  void _onToggleP0Supersonic(bool val) {
-    if (_result == null) {
-      setState(() => _isP0Supersonic = val);
-      return;
-    }
-    _togglingP0Supersonic = true;
-    setState(() {
-      _isP0Supersonic = val;
-      _activeField = _ActiveField.p0Ratio;
-    });
-    _onP0RatioChanged(_p0RatioCtrl.text);
-    _togglingP0Supersonic = false;
+  void _onToggleTAboveTmax(bool val) {
+    if (_result == null) { setState(() => _isTAboveTmax = val); return; }
+    _togglingT = true;
+    setState(() { _isTAboveTmax = val; _activeField = _ActiveField.tRatio; });
+    _onTRatioChanged(_tRatioCtrl.text);
+    _togglingT = false;
   }
 
-  void _onToggleFricSupersonic(bool val) {
-    if (_result == null) {
-      setState(() => _isFricSupersonic = val);
-      return;
-    }
-    _togglingFricSupersonic = true;
-    setState(() {
-      _isFricSupersonic = val;
-      _activeField = _ActiveField.fricFact;
-    });
-    _onFricFactChanged(_fricFactCtrl.text);
-    _togglingFricSupersonic = false;
+  void _onToggleT0Supersonic(bool val) {
+    if (_result == null) { setState(() => _isT0Supersonic = val); return; }
+    _togglingT0 = true;
+    setState(() { _isT0Supersonic = val; _activeField = _ActiveField.t0Ratio; });
+    _onT0RatioChanged(_t0RatioCtrl.text);
+    _togglingT0 = false;
+  }
+
+  void _onToggleP0Supersonic(bool val) {
+    if (_result == null) { setState(() => _isP0Supersonic = val); return; }
+    _togglingP0 = true;
+    setState(() { _isP0Supersonic = val; _activeField = _ActiveField.p0Ratio; });
+    _onP0RatioChanged(_p0RatioCtrl.text);
+    _togglingP0 = false;
   }
 
   // ─────────────────────────────────────────────
@@ -943,9 +848,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Column(
         children: [
           _buildAppBar(context),
@@ -993,7 +896,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
               ),
               Expanded(
                 child: Text(
-                  'Fanno Flow',
+                  'Rayleigh Flow',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
@@ -1004,19 +907,11 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
                 ),
               ),
               IconButton(
-                icon: Icon(
-                  Icons.tips_and_updates_outlined,
-                  color: Colors.yellow,
-                  size: Responsive.sp(context, 22),
-                ),
+                icon: Icon(Icons.tips_and_updates_outlined, color: Colors.yellow, size: Responsive.sp(context, 22)),
                 onPressed: () => _showFeaturesDialog(context),
               ),
               IconButton(
-                icon: Icon(
-                  Icons.info_outline,
-                  color: Colors.white,
-                  size: Responsive.sp(context, 22),
-                ),
+                icon: Icon(Icons.info_outline, color: Colors.white, size: Responsive.sp(context, 22)),
                 onPressed: () => _showInfoDialog(context),
               ),
             ],
@@ -1080,7 +975,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     );
   }
 
-  // ── Fields card (all 7 flow properties) ──────────────────────────────────
+  // ── Fields card ───────────────────────────────────────────────────────────
   Widget _buildFieldsCard(BuildContext context) {
     final r = _result;
     final bool hasResult = r != null;
@@ -1088,14 +983,23 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     final tSym = _inverseRatio ? 'T*/T' : 'T/T*';
     final pSym = _inverseRatio ? 'P*/P' : 'P/P*';
     final rhoSym = _inverseRatio ? 'ρ*/ρ' : 'ρ/ρ*';
+    final t0Sym = _inverseRatio ? 'T₀*/T₀' : 'T₀/T₀*';
     final p0Sym = _inverseRatio ? 'P₀*/P₀' : 'P₀/P₀*';
     final uSym = _inverseRatio ? 'U*/U' : 'U/U*';
 
-    final tHint = _inverseRatio ? 'Greater than ${_fmt(2.0 / (_gamma + 1.0))}' : 'Between 0 and ${_fmt((_gamma + 1.0) / 2.0)}';
-    final pHint = 'Must be > 0';
-    final rhoHint = _inverseRatio ? 'Between 0 and ${_fmt(sqrt((_gamma + 1.0) / (_gamma - 1.0)))}' : 'Greater than ${_fmt(sqrt((_gamma - 1.0) / (_gamma + 1.0)))}';
-    final p0Hint = _inverseRatio ? 'Between 0 and 1' : '≥ 1';
-    final uHint = _inverseRatio ? 'Greater than ${_fmt(sqrt((_gamma - 1.0) / (_gamma + 1.0)))}' : 'Between 0 and ${_fmt(sqrt((_gamma + 1.0) / (_gamma - 1.0)))}';
+    final maxT = RayleighFlowEngine.tRatioMax(_gamma);
+    final maxP = RayleighFlowEngine.pRatioMax(_gamma);
+    final minRho = RayleighFlowEngine.rhoRatioMin(_gamma);
+    final maxU = RayleighFlowEngine.uRatioMax(_gamma);
+
+    final tHint = _inverseRatio ? 'Greater than ${_fmt(1.0 / maxT)}' : 'Between 0 and ${_fmt(maxT)}';
+    final pHint = _inverseRatio ? 'Greater than ${_fmt(1.0 / maxP)}' : 'Between 0 and ${_fmt(maxP)}';
+    final rhoHint = _inverseRatio ? 'Between 0 and ${_fmt(1.0 / minRho)}' : 'Greater than ${_fmt(minRho)}';
+    final t0Hint = _inverseRatio ? 'Between 0 and 1' : 'Between 0 and 1';
+    final p0Hint = _isP0Supersonic
+        ? (_inverseRatio ? '≤ 1' : '≥ 1')
+        : (_inverseRatio ? 'Between 0 and 1' : 'Greater than 1');
+    final uHint = _inverseRatio ? 'Greater than ${_fmt(1.0 / maxU)}' : 'Between 0 and ${_fmt(maxU)}';
 
     return _Card(
       context: context,
@@ -1108,18 +1012,20 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
               _writeComputedFields();
               if (_result != null) {
                 _updating = true;
-                final r = _result!;
+                final r2 = _result!;
                 switch (_activeField) {
                   case _ActiveField.tRatio:
-                    _tRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.tRatio) : _fmt(r.tRatio);
+                    _tRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.tRatio) : _fmt(r2.tRatio);
                   case _ActiveField.pRatio:
-                    _pRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.pRatio) : _fmt(r.pRatio);
+                    _pRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.pRatio) : _fmt(r2.pRatio);
                   case _ActiveField.rhoRatio:
-                    _rhoRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio);
+                    _rhoRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.rhoRatio) : _fmt(r2.rhoRatio);
+                  case _ActiveField.t0Ratio:
+                    _t0RatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.t0Ratio) : _fmt(r2.t0Ratio);
                   case _ActiveField.p0Ratio:
-                    _p0RatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.p0Ratio) : _fmt(r.p0Ratio);
+                    _p0RatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.p0Ratio) : _fmt(r2.p0Ratio);
                   case _ActiveField.uRatio:
-                    _uRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.uRatio) : _fmt(r.uRatio);
+                    _uRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r2.uRatio) : _fmt(r2.uRatio);
                   default:
                     break;
                 }
@@ -1128,11 +1034,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
                 TextEditingController? ctrl;
                 void Function(String)? onChanged;
                 switch (_activeField) {
-                  case _ActiveField.tRatio: ctrl = _tRatioCtrl; onChanged = _onTRatioChanged; break;
-                  case _ActiveField.pRatio: ctrl = _pRatioCtrl; onChanged = _onPRatioChanged; break;
-                  case _ActiveField.rhoRatio: ctrl = _rhoRatioCtrl; onChanged = _onRhoRatioChanged; break;
-                  case _ActiveField.p0Ratio: ctrl = _p0RatioCtrl; onChanged = _onP0RatioChanged; break;
-                  case _ActiveField.uRatio: ctrl = _uRatioCtrl; onChanged = _onURatioChanged; break;
+                  case _ActiveField.tRatio: ctrl = _tRatioCtrl; onChanged = _onTRatioChanged;
+                  case _ActiveField.pRatio: ctrl = _pRatioCtrl; onChanged = _onPRatioChanged;
+                  case _ActiveField.rhoRatio: ctrl = _rhoRatioCtrl; onChanged = _onRhoRatioChanged;
+                  case _ActiveField.t0Ratio: ctrl = _t0RatioCtrl; onChanged = _onT0RatioChanged;
+                  case _ActiveField.p0Ratio: ctrl = _p0RatioCtrl; onChanged = _onP0RatioChanged;
+                  case _ActiveField.uRatio: ctrl = _uRatioCtrl; onChanged = _onURatioChanged;
                   default: break;
                 }
                 if (ctrl != null && onChanged != null) {
@@ -1158,11 +1065,8 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.swap_horiz,
-                    size: Responsive.sp(context, 14),
-                    color: _inverseRatio ? Colors.white : _C.labelMedium,
-                  ),
+                  Icon(Icons.swap_horiz, size: Responsive.sp(context, 14),
+                      color: _inverseRatio ? Colors.white : _C.labelMedium),
                   SizedBox(width: Responsive.wp(context, 4)),
                   Text(
                     'Reciprocal',
@@ -1179,7 +1083,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
         ],
       ),
       children: [
-        // ── Mach number ────────────────────────────────────────────────────
+        // ── Mach number ──────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.mach,
@@ -1194,7 +1098,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
 
         _divider(),
 
-        // ── T/T* (or T*/T) ────────────────────────────────────────────────
+        // ── T/T* ─────────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.tRatio,
@@ -1207,18 +1111,25 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           error: _fieldErrors[_ActiveField.tRatio],
           onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: '$tSym = ${_tRatioCtrl.text}',
-                  inverseTitle: _inverseRatio ? 'T/T* = ${_fmt(r.tRatio)}' : 'T*/T = ${_fmt(1.0 / r.tRatio)}',
-                  label1: _inverseRatio ? 'T* =' : 'T  =',
-                  label2: _inverseRatio ? 'T  =' : 'T* =',
-                  ratio: _inverseRatio ? 1.0 / r.tRatio : r.tRatio,
-                )
+                    title: '$tSym = ${_tRatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'T/T* = ${_fmt(r.tRatio)}' : 'T*/T = ${_fmt(1.0 / r.tRatio)}',
+                    label1: _inverseRatio ? 'T* =' : 'T  =',
+                    label2: _inverseRatio ? 'T  =' : 'T* =',
+                    ratio: _inverseRatio ? 1.0 / r.tRatio : r.tRatio,
+                  )
               : null,
+          trailing: _SupersonicToggle(
+            context: context,
+            isSupersonic: _isTAboveTmax,
+            labelSub: 'M<1/√γ',
+            labelSup: 'M>1/√γ',
+            onChanged: _onToggleTAboveTmax,
+          ),
         ),
 
         _divider(),
 
-        // ── P/P* (or P*/P) ────────────────────────────────────────────────
+        // ── P/P* ─────────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.pRatio,
@@ -1231,18 +1142,18 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           error: _fieldErrors[_ActiveField.pRatio],
           onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: '$pSym = ${_pRatioCtrl.text}',
-                  inverseTitle: _inverseRatio ? 'P/P* = ${_fmt(r.pRatio)}' : 'P*/P = ${_fmt(1.0 / r.pRatio)}',
-                  label1: _inverseRatio ? 'P* =' : 'P  =',
-                  label2: _inverseRatio ? 'P  =' : 'P* =',
-                  ratio: _inverseRatio ? 1.0 / r.pRatio : r.pRatio,
-                )
+                    title: '$pSym = ${_pRatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'P/P* = ${_fmt(r.pRatio)}' : 'P*/P = ${_fmt(1.0 / r.pRatio)}',
+                    label1: _inverseRatio ? 'P* =' : 'P  =',
+                    label2: _inverseRatio ? 'P  =' : 'P* =',
+                    ratio: _inverseRatio ? 1.0 / r.pRatio : r.pRatio,
+                  )
               : null,
         ),
 
         _divider(),
 
-        // ── ρ/ρ* (or ρ*/ρ) ────────────────────────────────────────────────
+        // ── ρ/ρ* ─────────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.rhoRatio,
@@ -1255,18 +1166,47 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           error: _fieldErrors[_ActiveField.rhoRatio],
           onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: '$rhoSym = ${_rhoRatioCtrl.text}',
-                  inverseTitle: _inverseRatio ? 'ρ/ρ* = ${_fmt(r.rhoRatio)}' : 'ρ*/ρ = ${_fmt(1.0 / r.rhoRatio)}',
-                  label1: _inverseRatio ? 'ρ* =' : 'ρ  =',
-                  label2: _inverseRatio ? 'ρ  =' : 'ρ* =',
-                  ratio: _inverseRatio ? 1.0 / r.rhoRatio : r.rhoRatio,
-                )
+                    title: '$rhoSym = ${_rhoRatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'ρ/ρ* = ${_fmt(r.rhoRatio)}' : 'ρ*/ρ = ${_fmt(1.0 / r.rhoRatio)}',
+                    label1: _inverseRatio ? 'ρ* =' : 'ρ  =',
+                    label2: _inverseRatio ? 'ρ  =' : 'ρ* =',
+                    ratio: _inverseRatio ? 1.0 / r.rhoRatio : r.rhoRatio,
+                  )
               : null,
         ),
 
         _divider(),
 
-        // ── P₀/P₀* (or P₀*/P₀) ─────────────────────────────────────────────
+        // ── T₀/T₀* ───────────────────────────────────────────────────────────
+        _flowField(
+          context: context,
+          field: _ActiveField.t0Ratio,
+          label: 'Stagnation Temperature Ratio',
+          symbol: t0Sym,
+          controller: _t0RatioCtrl,
+          focusNode: _t0RatioFocus,
+          hintText: t0Hint,
+          onChanged: _onT0RatioChanged,
+          error: _fieldErrors[_ActiveField.t0Ratio],
+          onHandyCalc: hasResult
+              ? () => _openHandyCalc(
+                    title: '$t0Sym = ${_t0RatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'T₀/T₀* = ${_fmt(r.t0Ratio)}' : 'T₀*/T₀ = ${_fmt(1.0 / r.t0Ratio)}',
+                    label1: _inverseRatio ? 'T₀* =' : 'T₀  =',
+                    label2: _inverseRatio ? 'T₀  =' : 'T₀* =',
+                    ratio: _inverseRatio ? 1.0 / r.t0Ratio : r.t0Ratio,
+                  )
+              : null,
+          trailing: _SupersonicToggle(
+            context: context,
+            isSupersonic: _isT0Supersonic,
+            onChanged: _onToggleT0Supersonic,
+          ),
+        ),
+
+        _divider(),
+
+        // ── P₀/P₀* ───────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.p0Ratio,
@@ -1279,12 +1219,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           error: _fieldErrors[_ActiveField.p0Ratio],
           onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: '$p0Sym = ${_p0RatioCtrl.text}',
-                  inverseTitle: _inverseRatio ? 'P₀/P₀* = ${_fmt(r.p0Ratio)}' : 'P₀*/P₀ = ${_fmt(1.0 / r.p0Ratio)}',
-                  label1: _inverseRatio ? 'P₀* =' : 'P₀  =',
-                  label2: _inverseRatio ? 'P₀  =' : 'P₀* =',
-                  ratio: _inverseRatio ? 1.0 / r.p0Ratio : r.p0Ratio,
-                )
+                    title: '$p0Sym = ${_p0RatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'P₀/P₀* = ${_fmt(r.p0Ratio)}' : 'P₀*/P₀ = ${_fmt(1.0 / r.p0Ratio)}',
+                    label1: _inverseRatio ? 'P₀* =' : 'P₀  =',
+                    label2: _inverseRatio ? 'P₀  =' : 'P₀* =',
+                    ratio: _inverseRatio ? 1.0 / r.p0Ratio : r.p0Ratio,
+                  )
               : null,
           trailing: _SupersonicToggle(
             context: context,
@@ -1295,27 +1235,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
 
         _divider(),
 
-        // ── 4fL*/D ─────────────────────────────────────────────────────────
-        _flowField(
-          context: context,
-          field: _ActiveField.fricFact,
-          label: 'Friction Parameter',
-          symbol: '4fL*/D',
-          controller: _fricFactCtrl,
-          focusNode: _fricFactFocus,
-          hintText: 'Must be > 0',
-          onChanged: _onFricFactChanged,
-          error: _fieldErrors[_ActiveField.fricFact],
-          trailing: _SupersonicToggle(
-            context: context,
-            isSupersonic: _isFricSupersonic,
-            onChanged: _onToggleFricSupersonic,
-          ),
-        ),
-
-        _divider(),
-
-        // ── U/U* (or U*/U) ────────────────────────────────────────────────
+        // ── U/U* ─────────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.uRatio,
@@ -1329,12 +1249,12 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           isLast: true,
           onHandyCalc: hasResult
               ? () => _openHandyCalc(
-                  title: '$uSym = ${_uRatioCtrl.text}',
-                  inverseTitle: _inverseRatio ? 'U/U* = ${_fmt(r.uRatio)}' : 'U*/U = ${_fmt(1.0 / r.uRatio)}',
-                  label1: _inverseRatio ? 'U* =' : 'U  =',
-                  label2: _inverseRatio ? 'U  =' : 'U* =',
-                  ratio: _inverseRatio ? 1.0 / r.uRatio : r.uRatio,
-                )
+                    title: '$uSym = ${_uRatioCtrl.text}',
+                    inverseTitle: _inverseRatio ? 'U/U* = ${_fmt(r.uRatio)}' : 'U*/U = ${_fmt(1.0 / r.uRatio)}',
+                    label1: _inverseRatio ? 'U* =' : 'U  =',
+                    label2: _inverseRatio ? 'U  =' : 'U* =',
+                    ratio: _inverseRatio ? 1.0 / r.uRatio : r.uRatio,
+                  )
               : null,
         ),
       ],
@@ -1342,7 +1262,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   }
 
   // ─────────────────────────────────────────────
-  //  Reusable sub-builders
+  //  Reusable sub-builders (identical to fanno)
   // ─────────────────────────────────────────────
   Widget _cardHeader(BuildContext context, IconData icon, String title) {
     return Row(
@@ -1350,10 +1270,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
         Container(
           width: Responsive.wp(context, 24),
           height: Responsive.wp(context, 24),
-          decoration: const BoxDecoration(
-            color: _C.headerBg,
-            shape: BoxShape.circle,
-          ),
+          decoration: const BoxDecoration(color: _C.headerBg, shape: BoxShape.circle),
           child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
@@ -1491,11 +1408,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 10)),
-              child: Icon(
-                Icons.compare_arrows_rounded,
-                size: Responsive.sp(context, 18),
-                color: _C.headerBg,
-              ),
+              child: Icon(Icons.compare_arrows_rounded, size: Responsive.sp(context, 18), color: _C.headerBg),
             ),
           );
         } else if (isComputed) {
@@ -1563,10 +1476,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
         Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
         SizedBox(width: Responsive.wp(context, 4)),
         Expanded(
-          child: Text(
-            msg,
-            style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
-          ),
+          child: Text(msg, style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText)),
         ),
       ],
     );
@@ -1579,12 +1489,13 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   void _showInfoDialog(BuildContext context) {
     showTopicInfoDialog(
       context,
-      title: 'About Fanno Flow',
+      title: 'About Rayleigh Flow',
       items: [
-        const MapEntry('Sonic Reference State', 'Superscript \'*\' refers to the sonic state where local Mach number = 1.0.'),
-        const MapEntry('Stagnation Reference State', 'Subscript \'0\' refers to the local stagnation or total state condition.'),
-        const MapEntry('Core Assumptions', 'Assumes steady, one-dimensional, adiabatic flow with constant friction in a constant area duct.'),
-        const MapEntry('Friction Limits', 'For supersonic flows, the friction parameter 4fL*/D is bounded by a maximum limit corresponding to M → ∞.'),
+        const MapEntry('Sonic Reference State', "Superscript '*' refers to the thermal sonic state where local Mach number = 1.0."),
+        const MapEntry('Stagnation Reference State', "Subscript '0' refers to the local stagnation or total state condition."),
+        const MapEntry('Core Assumptions', 'Assumes steady, one-dimensional flow with heat transfer in a constant area duct (no friction, no work).'),
+        const MapEntry('Temperature Ratio Branch', 'For T/T*, two Mach numbers exist for each value below the maximum. The toggle switches between M < 1/√γ and M > 1/√γ branches.'),
+        const MapEntry('Stagnation Temperature Limit', 'T₀/T₀* is bounded between 0 and 1. For supersonic flow, there is a non-zero lower limit of (1 − 1/γ²).'),
       ],
     );
   }
@@ -1598,18 +1509,22 @@ class _SupersonicToggle extends StatelessWidget {
     required this.context,
     required this.isSupersonic,
     required this.onChanged,
+    this.labelSub = 'Sub',
+    this.labelSup = 'Sup',
   });
 
   final BuildContext context;
   final bool isSupersonic;
   final ValueChanged<bool> onChanged;
+  final String labelSub;
+  final String labelSup;
 
   @override
   Widget build(BuildContext ctx) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _label(ctx, 'Sub', !isSupersonic),
+        _label(ctx, labelSub, !isSupersonic),
         SizedBox(width: Responsive.wp(ctx, 4)),
         GestureDetector(
           onTap: () => onChanged(!isSupersonic),
@@ -1628,16 +1543,13 @@ class _SupersonicToggle extends StatelessWidget {
                 margin: EdgeInsets.all(Responsive.wp(ctx, 2)),
                 width: Responsive.wp(ctx, 18),
                 height: Responsive.wp(ctx, 18),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                ),
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
               ),
             ),
           ),
         ),
         SizedBox(width: Responsive.wp(ctx, 4)),
-        _label(ctx, 'Sup', isSupersonic),
+        _label(ctx, labelSup, isSupersonic),
       ],
     );
   }
@@ -1681,18 +1593,10 @@ class _GasDropdownButton extends StatelessWidget {
           children: [
             Text(
               selectedName,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: Responsive.sp(ctx, 13),
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: Responsive.sp(ctx, 13), fontWeight: FontWeight.w500),
             ),
             SizedBox(width: Responsive.wp(ctx, 4)),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.white,
-              size: Responsive.sp(ctx, 16),
-            ),
+            Icon(Icons.keyboard_arrow_down, color: Colors.white, size: Responsive.sp(ctx, 16)),
           ],
         ),
       ),
@@ -1703,9 +1607,7 @@ class _GasDropdownButton extends StatelessWidget {
     showModalBottomSheet(
       context: ctx,
       backgroundColor: _C.pageBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1713,75 +1615,43 @@ class _GasDropdownButton extends StatelessWidget {
           children: [
             Padding(
               padding: EdgeInsets.fromLTRB(
-                Responsive.pad(ctx, 20),
-                Responsive.pad(ctx, 16),
-                Responsive.pad(ctx, 20),
-                Responsive.pad(ctx, 12),
+                Responsive.pad(ctx, 20), Responsive.pad(ctx, 16),
+                Responsive.pad(ctx, 20), Responsive.pad(ctx, 12),
               ),
               child: Text(
                 'Select Gas / Fluid',
-                style: TextStyle(
-                  fontSize: Responsive.sp(ctx, 14),
-                  fontWeight: FontWeight.w600,
-                  color: _C.headerBg,
-                ),
+                style: TextStyle(fontSize: Responsive.sp(ctx, 14), fontWeight: FontWeight.w600, color: _C.headerBg),
               ),
             ),
             Flexible(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  Responsive.pad(ctx, 16),
-                  0,
-                  Responsive.pad(ctx, 16),
-                  Responsive.pad(ctx, 12),
+                  Responsive.pad(ctx, 16), 0,
+                  Responsive.pad(ctx, 16), Responsive.pad(ctx, 12),
                 ),
                 child: Column(
-                  children: _kGases
-                      .where((g) => !g.gamma.isNaN)
-                      .map(
-                        (gas) => GestureDetector(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            onSelect(gas);
-                          },
-                          child: Container(
-                            margin: EdgeInsets.only(bottom: Responsive.hp(ctx, 8)),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: Responsive.pad(ctx, 14),
-                              vertical: Responsive.pad(ctx, 12),
-                            ),
-                            decoration: BoxDecoration(
-                              color: _C.cardBg,
-                              border: Border.all(
-                                color: _C.cardBorder,
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(Responsive.wp(ctx, 8)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  gas.name,
-                                  style: TextStyle(
-                                    fontSize: Responsive.sp(ctx, 14),
-                                    fontWeight: FontWeight.w500,
-                                    color: _C.textPrimary,
-                                  ),
-                                ),
-                                Text(
-                                  'γ = ${gas.gamma}',
-                                  style: TextStyle(
-                                    fontSize: Responsive.sp(ctx, 13),
-                                    color: _C.labelMedium,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
+                  children: _kGases.where((g) => !g.gamma.isNaN).map((gas) => GestureDetector(
+                    onTap: () { Navigator.pop(ctx); onSelect(gas); },
+                    child: Container(
+                      margin: EdgeInsets.only(bottom: Responsive.hp(ctx, 8)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: Responsive.pad(ctx, 14),
+                        vertical: Responsive.pad(ctx, 12),
+                      ),
+                      decoration: BoxDecoration(
+                        color: _C.cardBg,
+                        border: Border.all(color: _C.cardBorder, width: 1),
+                        borderRadius: BorderRadius.circular(Responsive.wp(ctx, 8)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(gas.name, style: TextStyle(fontSize: Responsive.sp(ctx, 14), fontWeight: FontWeight.w500, color: _C.textPrimary)),
+                          Text('γ = ${gas.gamma}', style: TextStyle(fontSize: Responsive.sp(ctx, 13), color: _C.labelMedium)),
+                        ],
+                      ),
+                    ),
+                  )).toList(),
                 ),
               ),
             ),
@@ -1803,7 +1673,6 @@ class _HandyCalcDialog extends StatefulWidget {
     required this.label2,
     required this.ratio,
   });
-
   final String title;
   final String inverseTitle;
   final String label1;
@@ -1822,9 +1691,7 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
   String? _error2;
 
   String _fmt(double v) {
-    if (v.abs() >= 1e6 || (v.abs() < 1e-4 && v != 0)) {
-      return v.toStringAsExponential(5);
-    }
+    if (v.abs() >= 1e6 || (v.abs() < 1e-4 && v != 0)) return v.toStringAsExponential(5);
     String s = v.toStringAsFixed(6);
     if (s.contains('.')) {
       s = s.replaceAll(RegExp(r'0+$'), '');
@@ -1838,19 +1705,12 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
     final trimmed = raw.trim();
     final val = double.tryParse(trimmed);
     if (val == null) {
-      _updating = true;
-      _ctrl2.clear();
-      _updating = false;
+      _updating = true; _ctrl2.clear(); _updating = false;
       setState(() => _error1 = trimmed.isEmpty ? null : 'Invalid format');
       return;
     }
-    _updating = true;
-    _ctrl2.text = _fmt(val / widget.ratio);
-    _updating = false;
-    setState(() {
-      _error1 = null;
-      _error2 = null;
-    });
+    _updating = true; _ctrl2.text = _fmt(val / widget.ratio); _updating = false;
+    setState(() { _error1 = null; _error2 = null; });
   }
 
   void _onDenominatorChanged(String raw) {
@@ -1858,35 +1718,22 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
     final trimmed = raw.trim();
     final val = double.tryParse(trimmed);
     if (val == null) {
-      _updating = true;
-      _ctrl1.clear();
-      _updating = false;
+      _updating = true; _ctrl1.clear(); _updating = false;
       setState(() => _error2 = trimmed.isEmpty ? null : 'Invalid format');
       return;
     }
-    _updating = true;
-    _ctrl1.text = _fmt(val * widget.ratio);
-    _updating = false;
-    setState(() {
-      _error1 = null;
-      _error2 = null;
-    });
+    _updating = true; _ctrl1.text = _fmt(val * widget.ratio); _updating = false;
+    setState(() { _error1 = null; _error2 = null; });
   }
 
   @override
-  void dispose() {
-    _ctrl1.dispose();
-    _ctrl2.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl1.dispose(); _ctrl2.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: _C.cardBg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Responsive.wp(context, 12)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.wp(context, 12))),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1899,13 +1746,8 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Enter either value to compute the other:',
-            style: TextStyle(
-              fontSize: Responsive.sp(context, 11),
-              color: _C.labelMedium,
-            ),
-          ),
+          Text('Enter either value to compute the other:',
+              style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.labelMedium)),
           SizedBox(height: Responsive.hp(context, 10)),
           _handyRow(context, widget.label1, _ctrl1, _onNumeratorChanged, _error1),
           if (_error1 != null) ...[
@@ -1913,23 +1755,15 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
             _errorText(context, _error1!),
           ],
           SizedBox(height: Responsive.hp(context, 8)),
-          Row(
-            children: [
-              SizedBox(width: Responsive.wp(context, 8)),
-              Expanded(child: Container(height: 1, color: _C.sectionDiv)),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 8)),
-                child: Text(
-                  '÷  ratio',
-                  style: TextStyle(
-                    fontSize: Responsive.sp(context, 9),
-                    color: _C.labelSmall,
-                  ),
-                ),
-              ),
-              Expanded(child: Container(height: 1, color: _C.sectionDiv)),
-            ],
-          ),
+          Row(children: [
+            SizedBox(width: Responsive.wp(context, 8)),
+            Expanded(child: Container(height: 1, color: _C.sectionDiv)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 8)),
+              child: Text('÷  ratio', style: TextStyle(fontSize: Responsive.sp(context, 9), color: _C.labelSmall)),
+            ),
+            Expanded(child: Container(height: 1, color: _C.sectionDiv)),
+          ]),
           SizedBox(height: Responsive.hp(context, 8)),
           _handyRow(context, widget.label2, _ctrl2, _onDenominatorChanged, _error2),
           if (_error2 != null) ...[
@@ -1941,72 +1775,37 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Done',
-            style: TextStyle(
-              color: _C.headerBg,
-              fontSize: Responsive.sp(context, 12),
-            ),
-          ),
+          child: Text('Done', style: TextStyle(color: _C.headerBg, fontSize: Responsive.sp(context, 12))),
         ),
       ],
     );
   }
 
   Widget _ratioBadge(BuildContext context, String text) => Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: Responsive.pad(context, 8),
-          vertical: Responsive.pad(context, 4),
-        ),
+        padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 8), vertical: Responsive.pad(context, 4)),
         decoration: BoxDecoration(
           color: _C.headerBg.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
-          border: Border.all(
-            color: _C.headerBg.withValues(alpha: 0.4),
-          ),
+          border: Border.all(color: _C.headerBg.withValues(alpha: 0.4)),
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: Responsive.sp(context, 11.5),
-            fontWeight: FontWeight.w600,
-            color: _C.headerBg,
-          ),
-        ),
+        child: Text(text, style: TextStyle(fontSize: Responsive.sp(context, 11.5), fontWeight: FontWeight.w600, color: _C.headerBg)),
       );
 
   Widget _errorText(BuildContext context, String msg) => Row(
         children: [
           Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
           SizedBox(width: Responsive.wp(context, 4)),
-          Expanded(
-            child: Text(
-              msg,
-              style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
-            ),
-          ),
+          Expanded(child: Text(msg, style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText))),
         ],
       );
 
-  Widget _handyRow(
-    BuildContext context,
-    String label,
-    TextEditingController ctrl,
-    ValueChanged<String> onChanged,
-    String? error,
-  ) {
+  Widget _handyRow(BuildContext context, String label, TextEditingController ctrl,
+      ValueChanged<String> onChanged, String? error) {
     return Row(
       children: [
         SizedBox(
           width: Responsive.wp(context, 36),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: Responsive.sp(context, 12),
-              color: _C.fieldLabel,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          child: Text(label, style: TextStyle(fontSize: Responsive.sp(context, 12), color: _C.fieldLabel, fontWeight: FontWeight.w500)),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
         Expanded(
@@ -2021,14 +1820,8 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
               controller: ctrl,
               onChanged: onChanged,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              style: TextStyle(
-                fontSize: Responsive.sp(context, 13),
-                color: _C.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              style: TextStyle(fontSize: Responsive.sp(context, 13), color: _C.textPrimary, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
@@ -2037,11 +1830,7 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
                 ),
                 border: InputBorder.none,
                 hintText: 'Enter value',
-                hintStyle: TextStyle(
-                  fontSize: Responsive.sp(context, 12),
-                  color: _C.fieldHint,
-                  fontWeight: FontWeight.w400,
-                ),
+                hintStyle: TextStyle(fontSize: Responsive.sp(context, 12), color: _C.fieldHint, fontWeight: FontWeight.w400),
               ),
             ),
           ),
@@ -2055,12 +1844,7 @@ class _HandyCalcDialogState extends State<_HandyCalcDialog> {
 //  Reusable Card
 // ─────────────────────────────────────────────
 class _Card extends StatelessWidget {
-  const _Card({
-    required this.context,
-    required this.header,
-    required this.children,
-  });
-
+  const _Card({required this.context, required this.header, required this.children});
   final BuildContext context;
   final Widget header;
   final List<Widget> children;
@@ -2078,10 +1862,8 @@ class _Card extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 14), Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 14), Responsive.pad(ctx, 10),
             ),
             child: header,
           ),

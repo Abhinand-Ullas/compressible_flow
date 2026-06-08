@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'isentropic_flow.dart';
 import 'normal_shock.dart';
 import 'fanno_flow.dart';
+import 'rayleigh_flow.dart';
 import '../utils/responsive.dart';
 
 // ─────────────────────────────────────────────
@@ -23,7 +24,7 @@ class _C {
 // ─────────────────────────────────────────────
 //  Page enum
 // ─────────────────────────────────────────────
-enum _Page { isentropicFlow, normalShock, fannoFlow }
+enum _Page { isentropicFlow, normalShock, fannoFlow, rayleighFlow }
 
 extension _PageInfo on _Page {
   String get title {
@@ -34,6 +35,8 @@ extension _PageInfo on _Page {
         return 'Normal Shock';
       case _Page.fannoFlow:
         return 'Fanno Flow';
+      case _Page.rayleighFlow:
+        return 'Rayleigh Flow';
     }
   }
 }
@@ -55,6 +58,7 @@ class _HomePageState extends State<HomePage> {
     _Page.isentropicFlow: GlobalKey(),
     _Page.normalShock: GlobalKey(),
     _Page.fannoFlow: GlobalKey(),
+    _Page.rayleighFlow: GlobalKey(),
   };
 
   void _selectPage(_Page page) {
@@ -79,6 +83,11 @@ class _HomePageState extends State<HomePage> {
       case _Page.fannoFlow:
         return FannoFlowScreen(
           key: _pageKeys[_Page.fannoFlow],
+          onDrawer: _openDrawer,
+        );
+      case _Page.rayleighFlow:
+        return RayleighFlowScreen(
+          key: _pageKeys[_Page.rayleighFlow],
           onDrawer: _openDrawer,
         );
     }

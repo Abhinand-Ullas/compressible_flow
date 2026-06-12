@@ -253,6 +253,14 @@ class RayleighFlowEngine {
     final v = p0Ratio;
     double xlo = supersonic ? 1.0 : 1e-9;
     double xhi = supersonic ? 100.0 : 1.0;
+
+    if (supersonic) {
+      while (p0RatioFromM(xhi, g) < v) {
+        xhi *= 2.0;
+        if (xhi > 1e6) break;
+      }
+    }
+
     double x = 0;
     for (int i = 0; i < 200; i++) {
       x = (xlo + xhi) / 2.0;
@@ -782,7 +790,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
   //  Toggle handlers
   // ─────────────────────────────────────────────
   void _onToggleTAboveTmax(bool val) {
-    if (_result == null) { setState(() => _isTAboveTmax = val); return; }
+    if (_result == null && _tRatioCtrl.text.trim().isEmpty) { setState(() => _isTAboveTmax = val); return; }
     _togglingT = true;
     setState(() { _isTAboveTmax = val; _activeField = _ActiveField.tRatio; });
     _onTRatioChanged(_tRatioCtrl.text);
@@ -790,7 +798,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
   }
 
   void _onToggleT0Supersonic(bool val) {
-    if (_result == null) { setState(() => _isT0Supersonic = val); return; }
+    if (_result == null && _t0RatioCtrl.text.trim().isEmpty) { setState(() => _isT0Supersonic = val); return; }
     _togglingT0 = true;
     setState(() { _isT0Supersonic = val; _activeField = _ActiveField.t0Ratio; });
     _onT0RatioChanged(_t0RatioCtrl.text);
@@ -798,7 +806,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
   }
 
   void _onToggleP0Supersonic(bool val) {
-    if (_result == null) { setState(() => _isP0Supersonic = val); return; }
+    if (_result == null && _p0RatioCtrl.text.trim().isEmpty) { setState(() => _isP0Supersonic = val); return; }
     _togglingP0 = true;
     setState(() { _isP0Supersonic = val; _activeField = _ActiveField.p0Ratio; });
     _onP0RatioChanged(_p0RatioCtrl.text);

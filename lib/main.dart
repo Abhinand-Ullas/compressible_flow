@@ -1,10 +1,11 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/material.dart';
-import 'isentropic_flow.dart';
-import 'normal_shock.dart';
-import 'fanno_flow.dart';
-import 'rayleigh_flow.dart';
-import '../utils/responsive.dart';
+import 'pages/isentropic_flow.dart';
+import 'pages/normal_shock.dart';
+import 'pages/fanno_flow.dart';
+import 'pages/oblique_shock.dart';
+import 'pages/rayleigh_flow.dart';
+import 'utils/responsive.dart';
 
 // ─────────────────────────────────────────────
 //  Colour tokens
@@ -24,7 +25,7 @@ class _C {
 // ─────────────────────────────────────────────
 //  Page enum
 // ─────────────────────────────────────────────
-enum _Page { isentropicFlow, normalShock, fannoFlow, rayleighFlow }
+enum _Page { isentropicFlow, normalShock, obliqueShock, fannoFlow, rayleighFlow }
 
 extension _PageInfo on _Page {
   String get title {
@@ -33,6 +34,8 @@ extension _PageInfo on _Page {
         return 'Isentropic Flow';
       case _Page.normalShock:
         return 'Normal Shock';
+      case _Page.obliqueShock:
+        return 'Oblique Shock';
       case _Page.fannoFlow:
         return 'Fanno Flow';
       case _Page.rayleighFlow:
@@ -57,6 +60,7 @@ class _HomePageState extends State<HomePage> {
   final Map<_Page, GlobalKey> _pageKeys = {
     _Page.isentropicFlow: GlobalKey(),
     _Page.normalShock: GlobalKey(),
+    _Page.obliqueShock: GlobalKey(),
     _Page.fannoFlow: GlobalKey(),
     _Page.rayleighFlow: GlobalKey(),
   };
@@ -78,6 +82,11 @@ class _HomePageState extends State<HomePage> {
       case _Page.normalShock:
         return NormalShockScreen(
           key: _pageKeys[_Page.normalShock],
+          onDrawer: _openDrawer,
+        );
+      case _Page.obliqueShock:
+        return ObliqueShockScreen(
+          key: _pageKeys[_Page.obliqueShock],
           onDrawer: _openDrawer,
         );
       case _Page.fannoFlow:

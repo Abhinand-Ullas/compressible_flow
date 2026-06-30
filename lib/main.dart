@@ -5,6 +5,7 @@ import 'pages/normal_shock.dart';
 import 'pages/fanno_flow.dart';
 import 'pages/oblique_shock.dart';
 import 'pages/rayleigh_flow.dart';
+import 'pages/conical_shock.dart';
 import 'utils/responsive.dart';
 
 // ─────────────────────────────────────────────
@@ -25,7 +26,7 @@ class _C {
 // ─────────────────────────────────────────────
 //  Page enum
 // ─────────────────────────────────────────────
-enum _Page { isentropicFlow, normalShock, obliqueShock, fannoFlow, rayleighFlow }
+enum _Page { isentropicFlow, normalShock, obliqueShock, fannoFlow, rayleighFlow, conicalShock }
 
 extension _PageInfo on _Page {
   String get title {
@@ -40,6 +41,8 @@ extension _PageInfo on _Page {
         return 'Fanno Flow';
       case _Page.rayleighFlow:
         return 'Rayleigh Flow';
+      case _Page.conicalShock:
+        return 'Conical Shock';
     }
   }
 }
@@ -63,6 +66,7 @@ class _HomePageState extends State<HomePage> {
     _Page.obliqueShock: GlobalKey(),
     _Page.fannoFlow: GlobalKey(),
     _Page.rayleighFlow: GlobalKey(),
+    _Page.conicalShock: GlobalKey(),
   };
 
   void _selectPage(_Page page) {
@@ -97,6 +101,11 @@ class _HomePageState extends State<HomePage> {
       case _Page.rayleighFlow:
         return RayleighFlowScreen(
           key: _pageKeys[_Page.rayleighFlow],
+          onDrawer: _openDrawer,
+        );
+      case _Page.conicalShock:
+        return ConicalShockScreen(
+          key: _pageKeys[_Page.conicalShock],
           onDrawer: _openDrawer,
         );
     }

@@ -1131,9 +1131,9 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
 
     final t2t1Hint   = _inverseRatio ? 'Between 0 and 1' : 'Greater than 1';
     final p2p1Hint   = _inverseRatio ? 'Between 0 and 1' : 'Greater than 1';
-    final rhoHint    = _inverseRatio ? 'Between 0 and 1' : 'Between 1 and (γ+1)/(γ−1)';
+    final rhoHint    = _inverseRatio ? 'Between 1/((γ+1)/(γ−1)) and 1' : 'Between 1 and (γ+1)/(γ−1)';
     final p02p01Hint = _inverseRatio ? 'Greater than 1'  : 'Between 0 and 1';
-    final p02p1Hint  = _inverseRatio ? 'Between 0 and 1' : 'Between 0 and P₀₂/P₁ max';
+    final p02p1Hint  = _inverseRatio ? 'Between 0 and 1/(p02p1min)' : 'Greater than p02p1min';
 
     return _Card(
       context: context,

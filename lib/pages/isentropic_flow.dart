@@ -281,12 +281,18 @@ class IsentropicEngine {
   // ── Case 7: ν → M (Newton-Raphson, always supersonic) ────────────────────
   static double machFromNu(double nuDeg, double gamma) {
     final nuRad = radians(nuDeg);
-    double m = 2.0;
+    double m = (nuDeg < 1.0) ? 1.05 : 2.0;
+
     double mOld = 0.0;
     int iter = 0;
     while ((m - mOld).abs() > 1e-7 && iter < 10000) {
+
       mOld = m;
-      m = mOld - (_fNu(mOld, gamma) - nuRad) / _dfNu(mOld, gamma);
+      double trial = mOld - (_fNu(mOld, gamma) - nuRad) / _dfNu(mOld, gamma);
+        if (trial <= 1.0) {
+    trial = (mOld + 1.0) / 2.0;
+}
+m = trial;
       iter++;
     }
     return m;
@@ -452,7 +458,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   // ─────────────────────────────────────────────
   //  Gamma change handler
   // ─────────────────────────────────────────────
-  void _onGammaChanged(String raw) {
+  void _onGammaChanged(String raw, {bool fromDropdown = false}) {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
@@ -485,19 +491,27 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
 
     // Valid gamma — check if it matches a preset gas
     _gamma = val;
-    final match = _kGases
-        .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
-        .firstOrNull;
 
-    setState(() {
-      _gammaValid = true;
-      _gammaError = null;
-      if (match != null) {
-        _selectedGasName = match.name;
-      } else if (_selectedGasName != 'Other') {
-        _selectedGasName = 'Other';
-      }
-    });
+    if (fromDropdown) {
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+      });
+    } else {
+      final match = _kGases
+          .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
+          .firstOrNull;
+
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+        if (match != null) {
+          _selectedGasName = match.name;
+        } else if (_selectedGasName != 'Other') {
+          _selectedGasName = 'Other';
+        }
+      });
+    }
 
     // Re-trigger calculation for current active field
     _recalculate();
@@ -1199,7 +1213,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                       _gammaCtrl.text = gas.gamma.toString();
                       _updating = false;
                       setState(() => _selectedGasName = gas.name);
-                      _onGammaChanged(gas.gamma.toString());
+                      _onGammaChanged(gas.gamma.toString(), fromDropdown: true);
                     },
                   ),
                 ],

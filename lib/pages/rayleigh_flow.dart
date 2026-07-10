@@ -406,7 +406,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
   // ─────────────────────────────────────────────
   //  Gamma change handler
   // ─────────────────────────────────────────────
-  void _onGammaChanged(String raw) {
+  void _onGammaChanged(String raw, {bool fromDropdown = false}) {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
@@ -423,16 +423,23 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
       return;
     }
     _gamma = val;
-    final match = _kGases.where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9).firstOrNull;
-    setState(() {
-      _gammaValid = true;
-      _gammaError = null;
-      if (match != null) {
-        _selectedGasName = match.name;
-      } else if (_selectedGasName != 'Other') {
-        _selectedGasName = 'Other';
-      }
-    });
+    if (fromDropdown) {
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+      });
+    } else {
+      final match = _kGases.where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9).firstOrNull;
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+        if (match != null) {
+          _selectedGasName = match.name;
+        } else if (_selectedGasName != 'Other') {
+          _selectedGasName = 'Other';
+        }
+      });
+    }
     _recalculate();
   }
 
@@ -600,7 +607,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
     if (val <= 0.0 || val >= 1.0) {
       setState(() {
         _fieldErrors[_ActiveField.t0Ratio] = _inverseRatio
-            ? 'T₀*/T₀ must be between 0 and 1'
+            ? 'T₀*/T₀ must be greater than 1'
             : 'T₀/T₀* must be between 0 and 1';
         _result = null;
       });
@@ -967,7 +974,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
                       _gammaCtrl.text = gas.gamma.toString();
                       _updating = false;
                       setState(() => _selectedGasName = gas.name);
-                      _onGammaChanged(gas.gamma.toString());
+                      _onGammaChanged(gas.gamma.toString(), fromDropdown: true);
                     },
                   ),
                 ],
@@ -1003,7 +1010,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
     final tHint = _inverseRatio ? 'Greater than ${_fmt(1.0 / maxT)}' : 'Between 0 and ${_fmt(maxT)}';
     final pHint = _inverseRatio ? 'Greater than ${_fmt(1.0 / maxP)}' : 'Between 0 and ${_fmt(maxP)}';
     final rhoHint = _inverseRatio ? 'Between 0 and ${_fmt(1.0 / minRho)}' : 'Greater than ${_fmt(minRho)}';
-    final t0Hint = _inverseRatio ? 'Between 0 and 1' : 'Between 0 and 1';
+    final t0Hint = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
     final p0Hint = _isP0Supersonic
         ? (_inverseRatio ? '≤ 1' : '≥ 1')
         : (_inverseRatio ? 'Between 0 and 1' : 'Greater than 1');

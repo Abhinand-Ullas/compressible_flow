@@ -1,32 +1,14 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/dialogs.dart';
+import '../utils/responsive.dart';
 
-// entry point
-void main() {
-  runApp(const AtmosphereApp());
-}
-// our app
-class AtmosphereApp extends StatelessWidget {
-  const AtmosphereApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Standard Atmosphere',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0D1F3C)),
-        useMaterial3: true,
-        fontFamily: 'Roboto',
-      ),
-      home: const StandardAtmosphereScreen(),
-    );
-  }
-}
-
-//  Colour tokens —  Blue theme
+// ─────────────────────────────────────────────
+//  Colour tokens  (identical palette to Isentropic Flow page)
+// ─────────────────────────────────────────────
 class _C {
-  static const headerBg = Color.fromARGB(255, 24, 62, 124);
+  static const headerBg = Color(0xFF18397C);
   static const pageBg = Color(0xFFF4F5F7);
   static const cardBg = Color(0xFFFFFFFF);
   static const cardBorder = Color(0xFFD1D5DB);
@@ -35,125 +17,533 @@ class _C {
   static const labelSmall = Color(0xFF9CA3AF);
   static const labelMedium = Color(0xFF6B7280);
   static const textPrimary = Color(0xFF111827);
-  // Input field
-  static const fieldBorder = Color(0xFFD1D5DB); // idle border
-  static const fieldBorderFocus = Color.fromARGB(
-    255,
-    24,
-    62,
-    124,
-  ); // focused border
+  static const fieldBorder = Color(0xFFD1D5DB);
+  static const fieldBorderFocus = Color(0xFF18397C);
   static const fieldBg = Color(0xFFFFFFFF);
   static const fieldHint = Color(0xFFB0B7C3);
-  static const fieldLabel = Color(0xFF374151); // label above field
-  static const fieldSubHint = Color(0xFF9CA3AF); // "0 to 86,000 m"
-  // Unit divider inside field
-  static const unitDivider = Color(0xFFE5E7EB);
-  static const unitText = Color(0xFF374151);
-  static const unitArrow = Color(0xFF6B7280);
-  // Section header
-  static const sectionIcon = Color.fromARGB(255, 24, 62, 124);
-  static const sectionLabel = Color.fromARGB(255, 24, 62, 124);
-  // Outputs
-  static const outputLabel = Color(0xFF374151);
+  static const fieldLabel = Color(0xFF374151);
+  static const sectionLabel = Color(0xFF18397C);
   static const outputValue = Color(0xFF0D1F3C);
-  static const outputDash = Color(0xFF9CA3AF);
-  static const outputUnit = Color(0xFF6B7280);
-  // Note card
-  static const noteCardBg = Color(0xFFEEF2F8);
-  static const noteCardBorder = Color(0xFFC7D4E6);
-  static const noteIcon = Color(0xFF0D1F3C);
-  static const noteText = Color(0xFF4B6082);
-  static const descText = Color(0xFF6B7280);
+  static const errorText = Color(0xFFDC2626);
+  static const inputActiveBg = Color(0xFFF0F4FF);
+  static const computedBg = Color(0xFFFAFAFA);
 }
 
+// ─────────────────────────────────────────────
+//  Which field the user is currently typing in
+// ─────────────────────────────────────────────
+enum _ActiveField { none, altitude, pressure, density }
 
-//  Unit definitions
-
-enum AltitudeUnit { m, ft, km }
-
-enum PressureUnit { pa, hpa, atm, psi }
-
-enum DensityUnit { kgm3, slugft3 }
-
-// unit display names
-
-extension AltitudeUnitExt on AltitudeUnit {
-  String get label => const ['m', 'ft', 'km'][index];
+// ─────────────────────────────────────────────
+//  Simple arithmetic expression evaluator (same as Isentropic page)
+//  Supports: + - * / ^ and parentheses
+// ─────────────────────────────────────────────
+double? _evalExpr(String input) {
+  final s = input.trim().replaceAll(' ', '');
+  if (s.isEmpty) return null;
+  try {
+    final result = _ExprParser(s).parse();
+    return result.isNaN || result.isInfinite ? null : result;
+  } catch (_) {
+    return null;
+  }
 }
 
-extension PressureUnitExt on PressureUnit {
-  String get label => const ['Pa', 'hPa', 'atm', 'psi'][index];
+class _ExprParser {
+  _ExprParser(this._s);
+  final String _s;
+  int _pos = 0;
+
+  double parse() {
+    final val = _parseAddSub();
+    if (_pos != _s.length) throw FormatException('unexpected char');
+    return val;
+  }
+
+  double _parseAddSub() {
+    double val = _parseMulDiv();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '+') { _pos++; val += _parseMulDiv(); }
+      else if (_s[_pos] == '-') { _pos++; val -= _parseMulDiv(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parseMulDiv() {
+    double val = _parsePow();
+    while (_pos < _s.length) {
+      if (_s[_pos] == '*') { _pos++; val *= _parsePow(); }
+      else if (_s[_pos] == '/') { _pos++; val /= _parsePow(); }
+      else break;
+    }
+    return val;
+  }
+
+  double _parsePow() {
+    double base = _parseUnary();
+    if (_pos < _s.length && _s[_pos] == '^') {
+      _pos++;
+      final exp = _parseUnary();
+      return pow(base, exp).toDouble();
+    }
+    return base;
+  }
+
+  double _parseUnary() {
+    if (_pos < _s.length && _s[_pos] == '-') { _pos++; return -_parsePrimary(); }
+    if (_pos < _s.length && _s[_pos] == '+') { _pos++; return _parsePrimary(); }
+    return _parsePrimary();
+  }
+
+  double _parsePrimary() {
+    if (_pos < _s.length && _s[_pos] == '(') {
+      _pos++;
+      final val = _parseAddSub();
+      if (_pos >= _s.length || _s[_pos] != ')') throw FormatException('missing )');
+      _pos++;
+      return val;
+    }
+    return _parseNumber();
+  }
+
+  double _parseNumber() {
+    final start = _pos;
+    while (_pos < _s.length && (RegExp(r'[0-9.]').hasMatch(_s[_pos]))) _pos++;
+    if (_pos == start) throw FormatException('expected number at pos $_pos');
+    return double.parse(_s.substring(start, _pos));
+  }
 }
 
-extension DensityUnitExt on DensityUnit {
-  String get label => const ['kg/m³', 'slug/ft³'][index];
+// ─────────────────────────────────────────────
+//  US Standard Atmosphere 1976 — layer table
+//  (geopotential altitude, 0 → 86000 m)
+// ─────────────────────────────────────────────
+class _AtmLayer {
+  final double hBase; // m
+  final double hTop; // m
+  final double tBase; // K
+  final double pBase; // Pa
+  final double lapse; // K/m  (0 = isothermal layer)
+  const _AtmLayer({
+    required this.hBase,
+    required this.hTop,
+    required this.tBase,
+    required this.pBase,
+    required this.lapse,
+  });
 }
 
-//  Screen
+class AtmosphereResult {
+  final double h; // geopotential altitude, m
+  final double p; // Pa
+  final double rho; // kg/m3
+  final double t; // K
+  final double a; // speed of sound, m/s
+  final double mu; // dynamic viscosity, Pa·s
+  const AtmosphereResult({
+    required this.h,
+    required this.p,
+    required this.rho,
+    required this.t,
+    required this.a,
+    required this.mu,
+  });
+}
 
+class AtmosphereEngine {
+  static const g0 = 9.80665; // m/s2
+  static const R = 287.0528; // J/(kg·K)
+  static const gamma = 1.4;
+  static const mu0 = 1.716e-5; // Pa·s, Sutherland reference
+  static const tSuth = 273.15; // K
+  static const sSuth = 110.4; // K
+
+  static const double hMin = 0.0;
+  static const double hMax = 86000.0;
+
+  static final List<_AtmLayer> layers = _buildLayers();
+  static final double pMin = layers.last.pBase == 0 ? 0 : _pressureAtTop(layers.last);
+  static final double pMax = layers.first.pBase;
+  static final double rhoMin = _densityAtTop(layers.last);
+  static final double rhoMax = layers.first.pBase / (R * layers.first.tBase);
+
+  // Base (hBase, TBase, lapse) definitions taken directly from the 1976
+  // Standard Atmosphere. Base pressures are then generated recursively so
+  // there is a single source of truth for the whole table.
+  static List<_AtmLayer> _buildLayers() {
+    const defs = [
+      [0.0, 288.15, -0.0065],
+      [11000.0, 216.65, 0.0],
+      [20000.0, 216.65, 0.001],
+      [32000.0, 228.65, 0.0028],
+      [47000.0, 270.65, 0.0],
+      [51000.0, 270.65, -0.0028],
+      [71000.0, 214.65, -0.002],
+      [86000.0, 186.946, 0.0], // top marker only — closes final layer
+    ];
+
+    final list = <_AtmLayer>[];
+    double p = 101325.0;
+    for (int i = 0; i < defs.length - 1; i++) {
+      final hBase = defs[i][0];
+      final tBase = defs[i][1];
+      final lapse = defs[i][2];
+      final hTop = defs[i + 1][0];
+      list.add(_AtmLayer(hBase: hBase, hTop: hTop, tBase: tBase, pBase: p, lapse: lapse));
+
+      final tTop = lapse != 0 ? tBase + lapse * (hTop - hBase) : tBase;
+      p = lapse != 0
+          ? p * pow(tTop / tBase, -g0 / (lapse * R)).toDouble()
+          : p * exp(-g0 * (hTop - hBase) / (R * tBase));
+    }
+    return list;
+  }
+
+  static double _pressureAtTop(_AtmLayer l) {
+    if (l.lapse != 0) {
+      final tTop = l.tBase + l.lapse * (l.hTop - l.hBase);
+      return l.pBase * pow(tTop / l.tBase, -g0 / (l.lapse * R)).toDouble();
+    }
+    return l.pBase * exp(-g0 * (l.hTop - l.hBase) / (R * l.tBase));
+  }
+
+  static double _densityAtTop(_AtmLayer l) {
+    final pTop = _pressureAtTop(l);
+    final tTop = l.lapse != 0 ? l.tBase + l.lapse * (l.hTop - l.hBase) : l.tBase;
+    return pTop / (R * tTop);
+  }
+// this function might have to be changed
+  static _AtmLayer _layerForAltitude(double h) { 
+    for (final l in layers) {
+      if (h <= l.hTop) return l;
+    }
+    return layers.last;
+  }
+
+  // Pressure decreases monotonically with altitude — walk the table until
+  // the requested pressure sits at or above a layer's top-of-layer pressure.
+  static _AtmLayer _layerForPressure(double p) {
+    for (final l in layers) {
+      if (p >= _pressureAtTop(l)) return l;
+    }
+    return layers.last;
+  }
+
+  static _AtmLayer _layerForDensity(double rho) {
+    for (final l in layers) {
+      if (rho >= _densityAtTop(l)) return l;
+    }
+    return layers.last;
+  }
+
+  static AtmosphereResult _finish({required double h, required double p, required double rho, required double t}) {
+    final a = sqrt(gamma * R * t);
+    final mu = mu0 * pow(t / tSuth, 1.5).toDouble() * (tSuth + sSuth) / (t + sSuth);
+    return AtmosphereResult(h: h, p: p, rho: rho, t: t, a: a, mu: mu);
+  }
+
+  /// Direct method — geopotential altitude is a native input to the 1976 model.
+  static AtmosphereResult fromAltitude(double h) {
+    final l = _layerForAltitude(h);
+    double t, p;
+    if (l.lapse != 0) {
+      t = l.tBase + l.lapse * (h - l.hBase);
+      p = l.pBase * pow(t / l.tBase, -g0 / (l.lapse * R)).toDouble();
+    } else {
+      t = l.tBase;
+      p = l.pBase * exp(-g0 * (h - l.hBase) / (R * l.tBase));
+    }
+    return _finish(h: h, p: p, rho: p / (R * t), t: t);
+  }
+
+  /// Inverse method — locate the layer by pressure, then invert the
+  /// pressure-altitude relation for that layer analytically (closed form,
+  /// no iteration needed since P(h) is monotonic within a layer).
+  static AtmosphereResult fromPressure(double p) {
+    final l = _layerForPressure(p);
+    double t, h;
+    if (l.lapse != 0) {
+      t = l.tBase * pow(p / l.pBase, -(l.lapse * R) / g0).toDouble();
+      h = l.hBase + (t - l.tBase) / l.lapse;
+    } else {
+      t = l.tBase;
+      h = l.hBase - (R * l.tBase / g0) * log(p / l.pBase);
+    }
+    return _finish(h: h, p: p, rho: p / (R * t), t: t);
+  }
+
+  /// Inverse method — same idea as [fromPressure] but inverting the
+  /// density-altitude relation for the layer.
+  static AtmosphereResult fromDensity(double rho) {
+    final l = _layerForDensity(rho);
+    final rhoBase = l.pBase / (R * l.tBase);
+    double t, h;
+    if (l.lapse != 0) {
+      final expo = -(l.lapse * R) / (g0 + l.lapse * R);
+      t = l.tBase * pow(rho / rhoBase, expo).toDouble();
+      h = l.hBase + (t - l.tBase) / l.lapse;
+    } else {
+      t = l.tBase;
+      h = l.hBase - (R * l.tBase / g0) * log(rho / rhoBase);
+    }
+    final p = rho * R * t;
+    return _finish(h: h, p: p, rho: rho, t: t);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Main Screen Widget
+// ─────────────────────────────────────────────
 class StandardAtmosphereScreen extends StatefulWidget {
-  const StandardAtmosphereScreen({super.key});
+  final VoidCallback? onDrawer;
+  const StandardAtmosphereScreen({super.key, this.onDrawer});
 
   @override
-  State<StandardAtmosphereScreen> createState() =>
-      _StandardAtmosphereScreenState();
+  State<StandardAtmosphereScreen> createState() => _StandardAtmosphereScreenState();
 }
 
 class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
-  //  Controllers 
   final _altCtrl = TextEditingController();
-  final _presCtrl = TextEditingController();
-  final _densCtrl = TextEditingController();
+  final _pCtrl = TextEditingController();
+  final _rhoCtrl = TextEditingController();
 
-  //  Selected units 
-  AltitudeUnit _altUnit = AltitudeUnit.m;
-  PressureUnit _presUnit = PressureUnit.pa;
-  DensityUnit _densUnit = DensityUnit.kgm3;
+  final _altFocus = FocusNode();
+  final _pFocus = FocusNode();
+  final _rhoFocus = FocusNode();
 
-  //  Output display values (we will connect  model here) 
-  // will Replace these with real computed values from our atmosphere model.
-  String _temperature = '—';
-  String _speedOfSound = '—';
-  String _viscosity = '—';
+  final _tCtrl = TextEditingController();
+  final _aCtrl = TextEditingController();
+  final _muCtrl = TextEditingController();
+
+  _ActiveField _activeField = _ActiveField.none;
+  AtmosphereResult? _result;
+
+  final Map<_ActiveField, String?> _fieldErrors = {};
+
+  bool _updating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    void onFocusChange(_ActiveField field, FocusNode node) {
+      node.addListener(() {
+        if (node.hasFocus && _activeField != field) {
+          setState(() => _activeField = field);
+        }
+      });
+    }
+
+    onFocusChange(_ActiveField.altitude, _altFocus);
+    onFocusChange(_ActiveField.pressure, _pFocus);
+    onFocusChange(_ActiveField.density, _rhoFocus);
+  }
 
   @override
   void dispose() {
-    _altCtrl.dispose();
-    _presCtrl.dispose();
-    _densCtrl.dispose();
+    for (final c in [_altCtrl, _pCtrl, _rhoCtrl, _tCtrl, _aCtrl, _muCtrl]) {
+      c.dispose();
+    }
+    for (final f in [_altFocus, _pFocus, _rhoFocus]) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  //  setstate called whenever any input changes 
-  // connect to our atmosphere model to populate the output fields.
-  void _onInputChanged() {
-    // update the output values based on the current inputs and selected units
-    // _temperature, _speedOfSound, _viscosity via setState().
+  // ─────────────────────────────────────────────
+  //  Field change handlers
+  // ─────────────────────────────────────────────
+  void _clearOtherErrors(_ActiveField keep) {
+    for (final f in _ActiveField.values) {
+      if (f != keep) _fieldErrors[f] = null;
+    }
   }
 
-  //  BUILD
+  void _clearComputedFields(_ActiveField except) {
+    _updating = true;
+    if (except != _ActiveField.altitude) _altCtrl.clear();
+    if (except != _ActiveField.pressure) _pCtrl.clear();
+    if (except != _ActiveField.density) _rhoCtrl.clear();
+    _tCtrl.clear();
+    _aCtrl.clear();
+    _muCtrl.clear();
+    _updating = false;
+  }
 
+  void _writeComputedFields(_ActiveField source, AtmosphereResult r) {
+    _updating = true;
+    if (source != _ActiveField.altitude) _altCtrl.text = _fmt(r.h);
+    if (source != _ActiveField.pressure) _pCtrl.text = _fmt(r.p);
+    if (source != _ActiveField.density) _rhoCtrl.text = _fmt(r.rho);
+    _tCtrl.text = _fmt(r.t);
+    _aCtrl.text = _fmt(r.a);
+    _muCtrl.text = _fmtMu(r.mu);
+    _updating = false;
+  }
+
+  void _onAltitudeChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.altitude;
+    _clearOtherErrors(_ActiveField.altitude);
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _fieldErrors[_ActiveField.altitude] = null;
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.altitude);
+      return;
+    }
+
+    final val = _evalExpr(trimmed);
+    if (val == null) {
+      setState(() {
+        _fieldErrors[_ActiveField.altitude] = 'Invalid expression';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.altitude);
+      return;
+    }
+
+    if (val < AtmosphereEngine.hMin || val > AtmosphereEngine.hMax) {
+      setState(() {
+        _fieldErrors[_ActiveField.altitude] = 'Must be between 0 and 86000 m';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.altitude);
+      return;
+    }
+
+    setState(() => _fieldErrors[_ActiveField.altitude] = null);
+    final r = AtmosphereEngine.fromAltitude(val);
+    setState(() => _result = r);
+    _writeComputedFields(_ActiveField.altitude, r);
+  }
+
+  void _onPressureChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.pressure;
+    _clearOtherErrors(_ActiveField.pressure);
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _fieldErrors[_ActiveField.pressure] = null;
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.pressure);
+      return;
+    }
+
+    final val = _evalExpr(trimmed);
+    if (val == null) {
+      setState(() {
+        _fieldErrors[_ActiveField.pressure] = 'Invalid expression';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.pressure);
+      return;
+    }
+
+    if (val <= AtmosphereEngine.pMin || val > AtmosphereEngine.pMax) {
+      setState(() {
+        _fieldErrors[_ActiveField.pressure] = 'Must be between ${_fmt(AtmosphereEngine.pMin)} and ${_fmt(AtmosphereEngine.pMax)} Pa';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.pressure);
+      return;
+    }
+
+    setState(() => _fieldErrors[_ActiveField.pressure] = null);
+    final r = AtmosphereEngine.fromPressure(val);
+    setState(() => _result = r);
+    _writeComputedFields(_ActiveField.pressure, r);
+  }
+
+  void _onDensityChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.density;
+    _clearOtherErrors(_ActiveField.density);
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _fieldErrors[_ActiveField.density] = null;
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.density);
+      return;
+    }
+
+    final val = _evalExpr(trimmed);
+    if (val == null) {
+      setState(() {
+        _fieldErrors[_ActiveField.density] = 'Invalid expression';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.density);
+      return;
+    }
+
+    if (val <= AtmosphereEngine.rhoMin || val > AtmosphereEngine.rhoMax) {
+      setState(() {
+        _fieldErrors[_ActiveField.density] = 'Must be between ${_fmt(AtmosphereEngine.rhoMin)} and ${_fmt(AtmosphereEngine.rhoMax)} kg/m³';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.density);
+      return;
+    }
+
+    setState(() => _fieldErrors[_ActiveField.density] = null);
+    final r = AtmosphereEngine.fromDensity(val);
+    setState(() => _result = r);
+    _writeComputedFields(_ActiveField.density, r);
+  }
+
+  // ─────────────────────────────────────────────
+  //  Formatting
+  // ─────────────────────────────────────────────
+  String _fmt(double v) {
+    if (v.abs() >= 1e6 || (v.abs() < 1e-4 && v != 0)) {
+      return v.toStringAsExponential(5);
+    }
+    // Up to 6 significant decimal digits, strip trailing zeros
+    String s = v.toStringAsFixed(6);
+    // Remove trailing zeros after decimal
+    if (s.contains('.')) {
+      s = s.replaceAll(RegExp(r'0+$'), '');
+      if (s.endsWith('.')) s = s + '0';
+    }
+    return s;
+  }
+
+  String _fmtMu(double v) => '${v.toStringAsExponential(4)}';
+
+  // ─────────────────────────────────────────────
+  //  BUILD
+  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.pageBg,
-      body: Column(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
         children: [
           _buildAppBar(context),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+              padding: EdgeInsets.fromLTRB(
+                Responsive.pad(context, 14),
+                Responsive.pad(context, 10),
+                Responsive.pad(context, 14),
+                Responsive.pad(context, 24),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildDescription(),
-                  const SizedBox(height: 14),
-                  _buildInputCard(),
-                  const SizedBox(height: 12),
-                  _buildOutputCard(),
-                  const SizedBox(height: 12),
-                  _buildNoteCard(),
+                  _buildInputsCard(context),
+                  SizedBox(height: Responsive.hp(context, 10)),
+                  _buildOutputsCard(context),
                 ],
               ),
             ),
@@ -163,38 +553,38 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     );
   }
 
-  //  App Bar 
   Widget _buildAppBar(BuildContext context) {
     return Container(
       color: _C.headerBg,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 13),
+          padding: EdgeInsets.fromLTRB(
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 13),
+          ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white, size: 22),
-                onPressed: () {},
+                icon: Icon(Icons.menu, color: Colors.white, size: Responsive.sp(context, 22)),
+                onPressed: widget.onDrawer ?? () {},
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Standard Atmosphere',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 15,
+                    fontSize: Responsive.sp(context, 15),
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.1,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.info_outline,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                icon: Icon(Icons.info_outline, color: Colors.white, size: Responsive.sp(context, 22)),
                 onPressed: () => _showInfoDialog(context),
               ),
             ],
@@ -204,596 +594,409 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     );
   }
 
-  //  Description 
-  Widget _buildDescription() {
-    return const Text(
-      'Calculate atmospheric properties of the standard atmosphere'
-      ' at a given altitude, pressure or density.',
-      style: TextStyle(fontSize: 12, color: _C.descText, height: 1.55),
-    );
-  }
-
-  //  Input Card 
-  Widget _buildInputCard() {
+  // ── Inputs card ───────────────────────────────────────────────────────────
+  Widget _buildInputsCard(BuildContext context) {
     return _Card(
-      header: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: const BoxDecoration(
-              color: _C.headerBg,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.swap_vert, color: Colors.white, size: 17),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            'INPUT',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: _C.sectionLabel,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
+      context: context,
+      header: _cardHeader(context, Icons.height, 'ATMOSPHERIC STATE'),
       children: [
-        //  Altitude 
-        _InputRow(
-          label: 'Altitude',
+        _atmField(
+          context: context,
+          field: _ActiveField.altitude,
+          label: 'Geopotential Altitude',
+          symbol: 'h  (m)',
           controller: _altCtrl,
-          unitLabel: _altUnit.label,
-          onUnitTap: _showAltUnitPicker,
-          hintText: 'Enter altitude',
-          subHint: '0 to 86,000 m',
-          onChanged: (_) => _onInputChanged(),
+          focusNode: _altFocus,
+          hintText: '0 to 86000',
+          onChanged: _onAltitudeChanged,
+          error: _fieldErrors[_ActiveField.altitude],
         ),
-        //  Pressure 
-        _InputRow(
+        _divider(),
+        _atmField(
+          context: context,
+          field: _ActiveField.pressure,
           label: 'Pressure',
-          controller: _presCtrl,
-          unitLabel: _presUnit.label,
-          onUnitTap: _showPresUnitPicker,
-          hintText: 'Enter pressure',
-          onChanged: (_) => _onInputChanged(),
+          symbol: 'P  (Pa)',
+          controller: _pCtrl,
+          focusNode: _pFocus,
+          hintText: 'Static pressure in pascals',
+          onChanged: _onPressureChanged,
+          error: _fieldErrors[_ActiveField.pressure],
         ),
-        //  Density 
-        _InputRow(
+        _divider(),
+        _atmField(
+          context: context,
+          field: _ActiveField.density,
           label: 'Density',
-          controller: _densCtrl,
-          unitLabel: _densUnit.label,
-          onUnitTap: _showDensUnitPicker,
-          hintText: 'Enter density',
-          onChanged: (_) => _onInputChanged(),
+          symbol: 'ρ  (kg/m³)',
+          controller: _rhoCtrl,
+          focusNode: _rhoFocus,
+          hintText: 'Static density',
+          onChanged: _onDensityChanged,
+          error: _fieldErrors[_ActiveField.density],
           isLast: true,
         ),
       ],
     );
   }
 
-  //  Output Card 
-  Widget _buildOutputCard() {
+  // ── Outputs card (always locked / computed) ─────────────────────────────
+  Widget _buildOutputsCard(BuildContext context) {
     return _Card(
-      header: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: const BoxDecoration(
-              color: _C.headerBg,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.bar_chart, color: Colors.white, size: 17),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            'OUTPUT',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: _C.sectionLabel,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
+      context: context,
+      header: _cardHeader(context, Icons.calculate_outlined, 'DERIVED PROPERTIES'),
       children: [
-        _OutputRow(
-          label: 'Temperature, ',
-          symbol: 'T',
-          value: _temperature,
-          unit: 'K',
+        _outputField(
+          context: context,
+          label: 'Temperature',
+          symbol: 'T  (K)',
+          controller: _tCtrl,
         ),
-        _OutputRow(
-          label: 'Speed of Sound, ',
-          symbol: 'a',
-          value: _speedOfSound,
-          unit: 'm/s',
+        _divider(),
+        _outputField(
+          context: context,
+          label: 'Speed of Sound',
+          symbol: 'a  (m/s)',
+          controller: _aCtrl,
         ),
-        _OutputRow(
-          label: 'Viscosity, ',
-          symbol: 'μ',
-          value: _viscosity,
-          unit: 'Pa·s',
+        _divider(),
+        _outputField(
+          context: context,
+          label: 'Dynamic Viscosity',
+          symbol: 'μ  (Pa·s)',
+          controller: _muCtrl,
           isLast: true,
         ),
       ],
     );
   }
 
-  //  Note Card 
-  Widget _buildNoteCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _C.noteCardBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _C.noteCardBorder, width: 0.5),
+  // ─────────────────────────────────────────────
+  //  Reusable sub-builders
+  // ─────────────────────────────────────────────
+  Widget _cardHeader(BuildContext context, IconData icon, String title) {
+    return Row(
+      children: [
+        Container(
+          width: Responsive.wp(context, 24),
+          height: Responsive.wp(context, 24),
+          decoration: const BoxDecoration(color: _C.headerBg, shape: BoxShape.circle),
+          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
+        ),
+        SizedBox(width: Responsive.wp(context, 8)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: Responsive.sp(context, 13.5),
+            fontWeight: FontWeight.w700,
+            color: _C.sectionLabel,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divider() => const Divider(height: 0, thickness: 0.5, color: _C.rowDivider);
+
+  /// A single editable atmospheric-state field row.
+  Widget _atmField({
+    required BuildContext context,
+    required _ActiveField field,
+    required String label,
+    required String symbol,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String hintText,
+    required ValueChanged<String> onChanged,
+    String? error,
+    bool isLast = false,
+  }) {
+    final isActive = _activeField == field;
+    final isComputed = _activeField != _ActiveField.none && !isActive && _result != null;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        Responsive.pad(context, 14),
+        Responsive.pad(context, 8),
+        Responsive.pad(context, 14),
+        isLast ? Responsive.pad(context, 10) : 0,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      child: const Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, size: 16, color: _C.noteIcon),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Based on the U.S. Standard Atmosphere 1976\nup to 86 km geometric altitude.',
-              style: TextStyle(
-                fontSize: 11.5,
-                color: _C.noteText,
-                height: 1.55,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  //  Unit pickers 
-  void _showAltUnitPicker() {
-    _showUnitSheet<AltitudeUnit>(
-      title: 'Unit',
-      values: AltitudeUnit.values,
-      labelOf: (u) => u.label,
-      current: _altUnit,
-      onSelect: (u) => setState(() {
-        _altUnit = u;
-        _onInputChanged();
-      }),
-    );
-  }
-
-  void _showPresUnitPicker() {
-    _showUnitSheet<PressureUnit>(
-      title: 'Unit',
-      values: PressureUnit.values,
-      labelOf: (u) => u.label,
-      current: _presUnit,
-      onSelect: (u) => setState(() {
-        _presUnit = u;
-        _onInputChanged();
-      }),
-    );
-  }
-
-  void _showDensUnitPicker() {
-    _showUnitSheet<DensityUnit>(
-      title: 'Unit',
-      values: DensityUnit.values,
-      labelOf: (u) => u.label,
-      current: _densUnit,
-      onSelect: (u) => setState(() {
-        _densUnit = u;
-        _onInputChanged();
-      }),
-    );
-  }
-
-  void _showUnitSheet<T>({
-    required String title,
-    required List<T> values,
-    required String Function(T) labelOf,
-    required T current,
-    required void Function(T) onSelect,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _C.pageBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: _C.headerBg,
+          Row(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: Responsive.sp(context, 13),
+                  fontWeight: FontWeight.w500,
+                  color: _C.fieldLabel,
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: values.map((v) {
-                  final isSelected = v == current;
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                      onSelect(v);
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _C.cardBg,
-                        border: Border.all(
-                          color: isSelected ? _C.headerBg : _C.cardBorder,
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            labelOf(v),
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: isSelected ? _C.headerBg : _C.textPrimary,
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_circle,
-                              size: 18,
-                              color: _C.headerBg,
-                            )
-                          else
-                            const Icon(
-                              Icons.radio_button_unchecked,
-                              size: 18,
-                              color: _C.cardBorder,
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+              SizedBox(width: Responsive.wp(context, 4)),
+              Text(
+                symbol,
+                style: TextStyle(
+                  fontSize: Responsive.sp(context, 13),
+                  fontWeight: FontWeight.w700,
+                  fontStyle: FontStyle.italic,
+                  color: _C.fieldLabel,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            ],
+          ),
+          SizedBox(height: Responsive.hp(context, 5)),
+          _buildInputField(
+            context: context,
+            controller: controller,
+            focusNode: focusNode,
+            hintText: hintText,
+            onChanged: onChanged,
+            hasError: error != null,
+            isComputed: isComputed,
+            isActive: isActive,
+          ),
+          if (error != null) ...[
+            SizedBox(height: Responsive.hp(context, 4)),
+            _errorText(context, error),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  //  Info dialog 
-  void _showInfoDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _C.cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        
-        content: const Text(
-          'U.S. Standard Atmosphere 1976\n\n'
-          'Provides temperature, pressure, density, speed of sound, and '
-          'dynamic viscosity from sea level up to 86 km geometric altitude.\n\n'
-          'Enter any one of: Altitude, Pressure, or Density to instantly '
-          'compute the remaining atmospheric state.',
-          style: TextStyle(
-            fontSize: 12.5,
-            height: 1.55,
-            color: Color(0xFF4B5563),
+  /// A read-only derived-output row — always shown in the "computed" style.
+  Widget _outputField({
+    required BuildContext context,
+    required String label,
+    required String symbol,
+    required TextEditingController controller,
+    bool isLast = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        Responsive.pad(context, 14),
+        Responsive.pad(context, 8),
+        Responsive.pad(context, 14),
+        isLast ? Responsive.pad(context, 10) : 0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: Responsive.sp(context, 13),
+                  fontWeight: FontWeight.w500,
+                  color: _C.fieldLabel,
+                ),
+              ),
+              SizedBox(width: Responsive.wp(context, 4)),
+              Text(
+                symbol,
+                style: TextStyle(
+                  fontSize: Responsive.sp(context, 13),
+                  fontWeight: FontWeight.w700,
+                  fontStyle: FontStyle.italic,
+                  color: _C.fieldLabel,
+                ),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: _C.headerBg, fontSize: 13),
+          SizedBox(height: Responsive.hp(context, 5)),
+          Container(
+            height: Responsive.hp(context, 46),
+            alignment: Alignment.centerLeft,
+            padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 12)),
+            decoration: BoxDecoration(
+              color: _C.computedBg,
+              borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
+              border: Border.all(color: _C.fieldBorder.withValues(alpha: 0.6), width: 1),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    controller.text.isEmpty ? '—' : controller.text,
+                    style: TextStyle(
+                      fontSize: Responsive.sp(context, 14),
+                      fontWeight: FontWeight.w500,
+                      color: controller.text.isEmpty ? _C.labelSmall : _C.outputValue,
+                    ),
+                  ),
+                ),
+                if (controller.text.isNotEmpty)
+                  Icon(Icons.lock_outline, size: Responsive.sp(context, 14), color: _C.labelSmall),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Styled text field — mirrors the Isentropic Flow input styling.
+  Widget _buildInputField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String hintText,
+    required ValueChanged<String> onChanged,
+    bool hasError = false,
+    bool isComputed = false,
+    bool isActive = false,
+  }) {
+    return ListenableBuilder(
+      listenable: focusNode,
+      builder: (_, __) {
+        final focused = focusNode.hasFocus;
+        Color borderColor;
+        Color bgColor;
+        if (hasError) {
+          borderColor = _C.errorText;
+          bgColor = const Color(0xFFFFF5F5);
+        } else if (focused || isActive) {
+          borderColor = _C.fieldBorderFocus;
+          bgColor = _C.inputActiveBg;
+        } else if (isComputed) {
+          borderColor = _C.fieldBorder.withValues(alpha: 0.6);
+          bgColor = _C.computedBg;
+        } else {
+          borderColor = _C.fieldBorder;
+          bgColor = _C.fieldBg;
+        }
+
+        Widget? suffix;
+        if (isComputed) {
+          suffix = Padding(
+            padding: EdgeInsets.only(right: Responsive.pad(context, 10)),
+            child: Icon(Icons.lock_outline, size: Responsive.sp(context, 14), color: _C.labelSmall),
+          );
+        }
+
+        return Container(
+          height: Responsive.hp(context, 46),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
+            border: Border.all(color: borderColor, width: 1),
+          ),
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            keyboardType: TextInputType.visiblePassword,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
+                return newValue.copyWith(text: text);
+              }),
+            ],
+            autocorrect: false,
+            enableSuggestions: false,
+            style: TextStyle(
+              fontSize: Responsive.sp(context, 14),
+              fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
+              color: isComputed ? _C.outputValue : _C.textPrimary,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: Responsive.pad(context, 12),
+                vertical: Responsive.pad(context, 13),
+              ),
+              border: InputBorder.none,
+              hintText: hintText,
+              hintStyle: TextStyle(
+                fontSize: Responsive.sp(context, 13),
+                fontWeight: FontWeight.w400,
+                color: _C.fieldHint,
+              ),
+              suffixIcon: suffix,
+              suffixIconConstraints: BoxConstraints(
+                minWidth: Responsive.wp(context, 34),
+                minHeight: Responsive.wp(context, 34),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _errorText(BuildContext context, String msg) {
+    return Row(
+      children: [
+        Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
+        SizedBox(width: Responsive.wp(context, 4)),
+        Expanded(
+          child: Text(
+            msg,
+            style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showInfoDialog(BuildContext context) {
+    showTopicInfoDialog(
+      context,
+      title: 'About Standard Atmosphere',
+      items: const [
+        MapEntry('Geopotential Altitude', 'All altitude values are geopotential, per the 1976 US Standard Atmosphere model.'),
+        MapEntry('Direct Method', 'When altitude is entered, temperature and pressure follow directly from the layer lapse-rate equations.'),
+        MapEntry('Inverse Method', 'When pressure or density is entered, the containing atmospheric layer is located first, then the layer equation is inverted in closed form to recover altitude and temperature.'),
+        MapEntry('Viscosity', 'Dynamic viscosity is computed from temperature using Sutherland\'s Law.'),
+        MapEntry('Valid Range', 'Altitude 0 – 86,000 m, covering the troposphere through the mesosphere.'),
+      ],
     );
   }
 }
 
 // ─────────────────────────────────────────────
-//  Reusable Card
+//  Reusable Card  (identical to Isentropic Flow page)
 // ─────────────────────────────────────────────
 class _Card extends StatelessWidget {
-  const _Card({required this.header, required this.children});
+  const _Card({
+    required this.context,
+    required this.header,
+    required this.children,
+  });
 
+  final BuildContext context;
   final Widget header;
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext ctx) {
     return Container(
       decoration: BoxDecoration(
         color: _C.cardBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(Responsive.wp(ctx, 12)),
         border: Border.all(color: _C.cardBorder, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: EdgeInsets.fromLTRB(
+              Responsive.pad(ctx, 14),
+              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 14),
+              Responsive.pad(ctx, 10),
+            ),
             child: header,
           ),
           const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),
           ...children,
         ],
       ),
-    );
-  }
-}
-
-//  Input Row
-//  Layout: label → bordered field (text + divider + unit▾) → optional subHint
-class _InputRow extends StatefulWidget {
-  const _InputRow({
-    required this.label,
-    required this.controller,
-    required this.unitLabel,
-    required this.onUnitTap,
-    required this.hintText,
-    this.subHint,
-    this.onChanged,
-    this.isLast = false,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final String unitLabel;
-  final VoidCallback onUnitTap;
-  final String hintText;
-  final String? subHint; // e.g. "0 to 86,000 m" shown below field
-  final ValueChanged<String>? onChanged;
-  final bool isLast;
-
-  @override
-  State<_InputRow> createState() => _InputRowState();
-}
-
-class _InputRowState extends State<_InputRow> {
-  final _focus = FocusNode();
-  bool _focused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = _focused ? _C.fieldBorderFocus : _C.fieldBorder;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 14, 16, widget.isLast ? 16 : 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          //  Field label 
-          Text(
-            widget.label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: _C.fieldLabel,
-            ),
-          ),
-          const SizedBox(height: 7),
-
-          //  Bordered field 
-          Container(
-            height: 46,
-            decoration: BoxDecoration(
-              color: _C.fieldBg,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: borderColor, width: 1),
-            ),
-            child: Row(
-              children: [
-                // Text input
-                Expanded(
-                  child: TextField(
-                    controller: widget.controller,
-                    focusNode: _focus,
-                    onChanged: widget.onChanged,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[-0-9. ]')),
-                    ],
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: _C.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 13,
-                      ),
-                      border: InputBorder.none,
-                      hintText: widget.hintText,
-                      hintStyle: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: _C.fieldHint,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Vertical divider
-                Container(width: 1, height: 26, color: _C.unitDivider),
-
-                // Unit button
-                GestureDetector(
-                  onTap: widget.onUnitTap,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.unitLabel,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: _C.unitText,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 16,
-                          color: _C.unitArrow,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          //  Optional sub-hint (e.g. range text) 
-          if (widget.subHint != null) ...[
-            const SizedBox(height: 5),
-            Text(
-              widget.subHint!,
-              style: const TextStyle(fontSize: 11, color: _C.fieldSubHint),
-            ),
-          ],
-
-          //  Row divider (between inputs, not after last) 
-          if (!widget.isLast) ...[
-            const SizedBox(height: 14),
-            const Divider(height: 0, thickness: 0.5, color: _C.rowDivider),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-//  Output Row
-//  Label with italic symbol + dash placeholder + unit
-
-class _OutputRow extends StatelessWidget {
-  const _OutputRow({
-    required this.label,
-    required this.symbol,
-    required this.value,
-    required this.unit,
-    this.isLast = false,
-  });
-
-  final String label;
-  final String symbol; // e.g. 'T', 'a', 'μ'
-  final String value;
-  final String unit;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDash = value == '—';
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              // Label + italic symbol
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      color: _C.outputLabel,
-                      fontFamily: 'Roboto',
-                    ),
-                    children: [
-                      TextSpan(text: label),
-                      TextSpan(
-                        text: symbol,
-                        style: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w500,
-                          color: _C.outputLabel,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Value
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: isDash ? FontWeight.w400 : FontWeight.w500,
-                  color: isDash ? _C.outputDash : _C.outputValue,
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Unit
-              SizedBox(
-                width: 40,
-                child: Text(
-                  unit,
-                  style: const TextStyle(fontSize: 12, color: _C.outputUnit),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (!isLast)
-          const Divider(
-            height: 0,
-            thickness: 0.5,
-            color: _C.rowDivider,
-            indent: 16,
-            endIndent: 16,
-          ),
-      ],
     );
   }
 }

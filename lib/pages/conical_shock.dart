@@ -233,55 +233,142 @@ class ConicalShockEngine {
     return [vt, n / d];
   }
 
-  static List<double> _rk4Step(double theta, List<double> w, double h, double gamma) {
+  // ── Adaptive embedded Runge-Kutta-Fehlberg 4(5) step  (DOP853-class) ──
+  // Returns the 5th-order solution plus an error estimate |y5 - y4|.
+  static ({List<double> y, double err}) _rkf45Step(
+      double theta, List<double> w, double h, double gamma) {
     final k1 = _tm(theta, w, gamma);
-    final w2 = [w[0] + h / 2 * k1[0], w[1] + h / 2 * k1[1]];
-    final k2 = _tm(theta + h / 2, w2, gamma);
-    final w3 = [w[0] + h / 2 * k2[0], w[1] + h / 2 * k2[1]];
-    final k3 = _tm(theta + h / 2, w3, gamma);
-    final w4 = [w[0] + h * k3[0], w[1] + h * k3[1]];
-    final k4 = _tm(theta + h, w4, gamma);
-    return [
-      w[0] + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
-      w[1] + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]),
+    final w2 = [w[0] + h * (1 / 4) * k1[0], w[1] + h * (1 / 4) * k1[1]];
+    final k2 = _tm(theta + h / 4, w2, gamma);
+    final w3 = [
+      w[0] + h * (3 / 32 * k1[0] + 9 / 32 * k2[0]),
+      w[1] + h * (3 / 32 * k1[1] + 9 / 32 * k2[1]),
     ];
+    final k3 = _tm(theta + 3 * h / 8, w3, gamma);
+    final w4 = [
+      w[0] + h * (1932 / 2197 * k1[0] - 7200 / 2197 * k2[0] + 7296 / 2197 * k3[0]),
+      w[1] + h * (1932 / 2197 * k1[1] - 7200 / 2197 * k2[1] + 7296 / 2197 * k3[1]),
+    ];
+    final k4 = _tm(theta + 12 * h / 13, w4, gamma);
+    final w5 = [
+      w[0] + h * (439 / 216 * k1[0] - 8 * k2[0] + 3680 / 513 * k3[0] - 845 / 4104 * k4[0]),
+      w[1] + h * (439 / 216 * k1[1] - 8 * k2[1] + 3680 / 513 * k3[1] - 845 / 4104 * k4[1]),
+    ];
+    final k5 = _tm(theta + h, w5, gamma);
+    final w6 = [
+      w[0] +
+          h *
+              (-8 / 27 * k1[0] +
+                  2 * k2[0] -
+                  3544 / 2565 * k3[0] +
+                  1859 / 4104 * k4[0] -
+                  11 / 40 * k5[0]),
+      w[1] +
+          h *
+              (-8 / 27 * k1[1] +
+                  2 * k2[1] -
+                  3544 / 2565 * k3[1] +
+                  1859 / 4104 * k4[1] -
+                  11 / 40 * k5[1]),
+    ];
+    final k6 = _tm(theta + h / 2, w6, gamma);
+
+    final y4 = [
+      w[0] + h * (25 / 216 * k1[0] + 1408 / 2565 * k3[0] + 2197 / 4104 * k4[0] - 1 / 5 * k5[0]),
+      w[1] + h * (25 / 216 * k1[1] + 1408 / 2565 * k3[1] + 2197 / 4104 * k4[1] - 1 / 5 * k5[1]),
+    ];
+    final y5 = [
+      w[0] +
+          h *
+              (16 / 135 * k1[0] +
+                  6656 / 12825 * k3[0] +
+                  28561 / 56430 * k4[0] -
+                  9 / 50 * k5[0] +
+                  2 / 55 * k6[0]),
+      w[1] +
+          h *
+              (16 / 135 * k1[1] +
+                  6656 / 12825 * k3[1] +
+                  28561 / 56430 * k4[1] -
+                  9 / 50 * k5[1] +
+                  2 / 55 * k6[1]),
+    ];
+
+    final err = sqrt(
+      (y5[0] - y4[0]) * (y5[0] - y4[0]) + (y5[1] - y4[1]) * (y5[1] - y4[1]),
+    );
+    return (y: y5, err: err);
   }
 
-  /// Integrates backwards from theta_s towards the axis, looking for the
-  /// solid-cone surface event (V_theta crosses zero, increasing direction).
+  /// Integrates backwards from theta_s towards the axis with adaptive step
+  /// size control (rtol/atol ~ DOP853 settings), looking for the solid-cone
+  /// surface event (V_theta crosses zero, increasing direction). Once the
+  /// bracketing step is found, the exact crossing is pinned down with
+  /// Brent's method on a dense-output re-integration (mirrors solve_ivp's
+  /// event handling).
   static ({double thetaC, List<double> wc})? _integrateToSurface(
       double thetaS, List<double> w0, double gamma) {
-    const steps = 4000;
-    double h = -thetaS / steps;
+    const rtol = 1e-13;
+    const atol = 1e-15;
+    const safety = 0.9;
+    const minH = 1e-14;
+
     double theta = thetaS;
     var w = w0;
+    double h = -thetaS / 200;
+    if (h >= 0) return null;
 
-    for (int i = 0; i < steps; i++) {
-      if (theta + h <= 1e-9) {
-        h = -(theta - 1e-9);
-        if (h >= 0) break;
-      }
-      final wNew = _rk4Step(theta, w, h, gamma);
-      if (wNew[0].isNaN || wNew[1].isNaN) return null;
+    int guard = 0;
+    while (theta > 1e-9 && guard < 200000) {
+      guard++;
+      if (theta + h <= 1e-9) h = -(theta - 1e-9);
+      if (h >= 0) break;
 
-      if (w[1] < 0 && wNew[1] >= 0) {
-        // Bisect within this step (fraction of h) for the crossing point.
-        double lo = 0.0, hi = 1.0;
-        var wHi = wNew;
-        for (int b = 0; b < 60; b++) {
-          final mid = 0.5 * (lo + hi);
-          final wMid = _rk4Step(theta, w, h * mid, gamma);
-          if (wMid[1] >= 0) {
-            hi = mid;
-            wHi = wMid;
-          } else {
-            lo = mid;
+      final step = _rkf45Step(theta, w, h, gamma);
+      if (step.y[0].isNaN || step.y[1].isNaN) return null;
+
+      final scale = atol + rtol * sqrt(w[0] * w[0] + w[1] * w[1]);
+      final normErr = step.err / (scale == 0 ? 1e-15 : scale);
+
+      if (normErr <= 1.0 || h.abs() <= minH) {
+        final wNew = step.y;
+
+        if (w[1] < 0 && wNew[1] >= 0) {
+          // Locate the crossing within [theta+h, theta] using Brent's
+          // method on a dense-output function built by re-integrating
+          // from the last accepted point.
+          final thetaPrev = theta;
+          final wPrev = w;
+          final hStep = h;
+          double vtAt(double thetaTarget) {
+            final frac = (thetaTarget - thetaPrev) / hStep;
+            final sub = _rkf45Step(thetaPrev, wPrev, hStep * frac, gamma);
+            return sub.y[1];
           }
+
+          final root = _brentRoot(vtAt, theta + h, theta, xtol: 1e-14);
+          if (root == null) {
+            return (thetaC: theta + h, wc: wNew);
+          }
+          final frac = (root - thetaPrev) / hStep;
+          final wc = _rkf45Step(thetaPrev, wPrev, hStep * frac, gamma).y;
+          return (thetaC: root, wc: wc);
         }
-        return (thetaC: theta + h * hi, wc: wHi);
+
+        theta += h;
+        w = wNew;
       }
-      theta += h;
-      w = wNew;
+
+      // Adaptive step-size update (PI-ish controller, classic RKF45 form).
+      double factor;
+      if (normErr == 0) {
+        factor = 5.0;
+      } else {
+        factor = safety * pow(1.0 / normErr, 1.0 / 5.0).toDouble();
+        factor = factor.clamp(0.2, 5.0);
+      }
+      h *= factor;
+      if (h >= 0) h = -minH;
     }
     return null;
   }
@@ -310,22 +397,22 @@ class ConicalShockEngine {
     );
   }
 
-  // ── Generic robust root finder (bisection w/ auto-bracket, mirrors brentq use) ──
-  static double? _bisectRoot(
-      double Function(double) f, double lo, double hi, {int maxIter = 100}) {
-    double flo = f(lo);
-    double fhi = f(hi);
-    if (flo.isNaN || fhi.isNaN) return null;
+  // ── Brent's method root finder (auto-bracket, mirrors scipy's brentq) ──
+  static double? _brentRoot(
+      double Function(double) f, double lo, double hi, {double xtol = 1e-15, int maxIter = 200}) {
+    double a = lo, b = hi;
+    double fa = f(a), fb = f(b);
+    if (fa.isNaN || fb.isNaN) return null;
 
-    if (flo * fhi > 0) {
+    if (fa * fb > 0) {
       const n = 60;
       bool found = false;
       for (int i = 0; i < n; i++) {
-        final a = lo + (hi - lo) * i / n;
-        final b = lo + (hi - lo) * (i + 1) / n;
-        final fa = f(a), fb = f(b);
-        if (!fa.isNaN && !fb.isNaN && fa * fb < 0) {
-          lo = a; hi = b; flo = fa; fhi = fb;
+        final p = lo + (hi - lo) * i / n;
+        final q = lo + (hi - lo) * (i + 1) / n;
+        final fp = f(p), fq = f(q);
+        if (!fp.isNaN && !fq.isNaN && fp * fq < 0) {
+          a = p; b = q; fa = fp; fb = fq;
           found = true;
           break;
         }
@@ -333,18 +420,60 @@ class ConicalShockEngine {
       if (!found) return null;
     }
 
-    for (int i = 0; i < maxIter; i++) {
-      final mid = 0.5 * (lo + hi);
-      final fm = f(mid);
-      if (fm.isNaN) return null;
-      if (flo * fm <= 0) {
-        hi = mid; fhi = fm;
-      } else {
-        lo = mid; flo = fm;
-      }
-      if ((hi - lo).abs() < 1e-13) break;
+    if (fa.abs() < fb.abs()) {
+      final ta = a, tfa = fa;
+      a = b; fa = fb;
+      b = ta; fb = tfa;
     }
-    return 0.5 * (lo + hi);
+    double c = a, fc = fa;
+    bool mflag = true;
+    double d = 0;
+
+    for (int iter = 0; iter < maxIter; iter++) {
+      if (fb == 0 || (b - a).abs() < xtol) return b;
+
+      double s;
+      if (fa != fc && fb != fc) {
+        // Inverse quadratic interpolation.
+        s = a * fb * fc / ((fa - fb) * (fa - fc)) +
+            b * fa * fc / ((fb - fa) * (fb - fc)) +
+            c * fa * fb / ((fc - fa) * (fc - fb));
+      } else {
+        // Secant method.
+        s = b - fb * (b - a) / (fb - fa);
+      }
+
+      final outOfRange = (b > a)
+          ? (s < (3 * a + b) / 4 || s > b)
+          : (s > (3 * a + b) / 4 || s < b);
+      final tooSlow1 = mflag && (s - b).abs() >= (b - c).abs() / 2;
+      final tooSlow2 = !mflag && (s - b).abs() >= (c - d).abs() / 2;
+      final tooSmallStep1 = mflag && (b - c).abs() < xtol;
+      final tooSmallStep2 = !mflag && (c - d).abs() < xtol;
+
+      if (outOfRange || tooSlow1 || tooSlow2 || tooSmallStep1 || tooSmallStep2) {
+        s = 0.5 * (a + b);
+        mflag = true;
+      } else {
+        mflag = false;
+      }
+
+      final fs = f(s);
+      if (fs.isNaN) return null;
+      d = c;
+      c = b; fc = fb;
+      if (fa * fs < 0) {
+        b = s; fb = fs;
+      } else {
+        a = s; fa = fs;
+      }
+      if (fa.abs() < fb.abs()) {
+        final ta = a, tfa = fa;
+        a = b; fa = fb;
+        b = ta; fb = tfa;
+      }
+    }
+    return b;
   }
 
   /// Mirrors analyze_detachment_limits(): mach angle, max attachable theta_s,
@@ -397,7 +526,7 @@ class ConicalShockEngine {
       final m = findConeFromShock(ts, m1, gamma);
       return (m == null || m.thetaC.isNaN) ? 99.0 : m.thetaC - targetTcRad;
     }
-    return _bisectRoot(obj, low, high);
+    return _brentRoot(obj, low, high, xtol: 1e-15, maxIter: 200);
   }
 
   static double? solveForTargetMc(
@@ -406,7 +535,7 @@ class ConicalShockEngine {
       final m = findConeFromShock(ts, m1, gamma);
       return m == null ? -99.0 : m.mc - targetMc;
     }
-    return _bisectRoot(obj, low, high);
+    return _brentRoot(obj, low, high, xtol: 1e-15, maxIter: 200);
   }
 
   /// Mirrors the post-processing block in the reference notebook's __main__:
@@ -435,7 +564,7 @@ class ConicalShockEngine {
             .toDouble();
 
     final cp = (2.0 / (gamma * m1 * m1)) * (pcP1 - 1.0);
-    final dsR = -log(po2po1);
+    final dsR = max(0.0, -log(po2po1));
     final vTotalPrime = sqrt(m.vrC * m.vrC + m.vtC * m.vtC);
 
     return ConicalResult(
@@ -562,7 +691,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   // ─────────────────────────────────────────────
   //  Gamma change
   // ─────────────────────────────────────────────
-  void _onGammaChanged(String raw) {
+  void _onGammaChanged(String raw, {bool fromDropdown = false}) {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
@@ -591,18 +720,25 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       return;
     }
     _gamma = val;
-    final match = _kGases
-        .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
-        .firstOrNull;
-    setState(() {
-      _gammaValid = true;
-      _gammaError = null;
-      if (match != null) {
-        _selectedGasName = match.name;
-      } else if (_selectedGasName != 'Other') {
-        _selectedGasName = 'Other';
-      }
-    });
+    if (fromDropdown) {
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+      });
+    } else {
+      final match = _kGases
+          .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
+          .firstOrNull;
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+        if (match != null) {
+          _selectedGasName = match.name;
+        } else if (_selectedGasName != 'Other') {
+          _selectedGasName = 'Other';
+        }
+      });
+    }
     if (_m1Valid) _recomputeLimits();
     _recalculate();
   }
@@ -1067,7 +1203,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                       _gammaCtrl.text = gas.gamma.toString();
                       _updating = false;
                       setState(() => _selectedGasName = gas.name);
-                      _onGammaChanged(gas.gamma.toString());
+                      _onGammaChanged(gas.gamma.toString(), fromDropdown: true);
                     },
                   ),
                 ],
@@ -1267,10 +1403,10 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
 
               _outputRowPair(
                 context: context,
-                sym1: 'θs (wave)',
-                val1: r != null ? '${outVal(r.thetaS * 180 / pi)}°' : '—',
-                sym2: 'δ (turn)',
-                val2: r != null ? '${outVal(r.delta * 180 / pi)}°' : '—',
+                sym1: 'δ (turn)',
+                val1: r != null ? '${outVal(r.delta * 180 / pi)}°' : '—',
+                sym2: 'M₂ (post-shock)',
+                val2: outVal(r?.m2),
               ),
               SizedBox(height: Responsive.hp(context, 8)),
               _outputRowPair(
@@ -1281,12 +1417,11 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 val2: outVal(r?.dsR),
               ),
               SizedBox(height: Responsive.hp(context, 8)),
-              _outputRowPair(
+              _outputRowFull(
                 context: context,
-                sym1: "V' surface",
-                val1: outVal(r?.vTotalPrime),
-                sym2: 'M₂ (post-shock)',
-                val2: outVal(r?.m2),
+                symbol: "V' surface",
+                label: 'Velocity ratio at cone surface',
+                value: outVal(r?.vTotalPrime),
               ),
               SizedBox(height: Responsive.hp(context, 10)),
               const Divider(height: 0, thickness: 0.5),

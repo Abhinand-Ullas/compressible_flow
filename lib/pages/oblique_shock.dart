@@ -398,7 +398,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
   // ─────────────────────────────────────────────
   //  Gamma change
   // ─────────────────────────────────────────────
-  void _onGammaChanged(String raw) {
+  void _onGammaChanged(String raw, {bool fromDropdown = false}) {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
@@ -427,18 +427,25 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
       return;
     }
     _gamma = val;
-    final match = _kGases
-        .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
-        .firstOrNull;
-    setState(() {
-      _gammaValid = true;
-      _gammaError = null;
-      if (match != null) {
-        _selectedGasName = match.name;
-      } else if (_selectedGasName != 'Other') {
-        _selectedGasName = 'Other';
-      }
-    });
+    if (fromDropdown) {
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+      });
+    } else {
+      final match = _kGases
+          .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
+          .firstOrNull;
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+        if (match != null) {
+          _selectedGasName = match.name;
+        } else if (_selectedGasName != 'Other') {
+          _selectedGasName = 'Other';
+        }
+      });
+    }
     // Recalc theta_max if M1 valid
     if (_m1Valid) {
       _thetaMaxRad = ObliqueShockEngine.thetaMax(_m1Value, _gamma);
@@ -891,7 +898,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                       _gammaCtrl.text = gas.gamma.toString();
                       _updating = false;
                       setState(() => _selectedGasName = gas.name);
-                      _onGammaChanged(gas.gamma.toString());
+                      _onGammaChanged(gas.gamma.toString(), fromDropdown: true);
                     },
                   ),
                 ],

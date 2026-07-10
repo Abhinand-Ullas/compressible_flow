@@ -430,7 +430,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   // ─────────────────────────────────────────────
   //  Gamma change handler
   // ─────────────────────────────────────────────
-  void _onGammaChanged(String raw) {
+  void _onGammaChanged(String raw, {bool fromDropdown = false}) {
     if (_updating) return;
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '.') {
@@ -459,18 +459,25 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
       return;
     }
     _gamma = val;
-    final match = _kGases
-        .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
-        .firstOrNull;
-    setState(() {
-      _gammaValid = true;
-      _gammaError = null;
-      if (match != null) {
-        _selectedGasName = match.name;
-      } else if (_selectedGasName != 'Other') {
-        _selectedGasName = 'Other';
-      }
-    });
+    if (fromDropdown) {
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+      });
+    } else {
+      final match = _kGases
+          .where((g) => !g.gamma.isNaN && (g.gamma - val).abs() < 1e-9)
+          .firstOrNull;
+      setState(() {
+        _gammaValid = true;
+        _gammaError = null;
+        if (match != null) {
+          _selectedGasName = match.name;
+        } else if (_selectedGasName != 'Other') {
+          _selectedGasName = 'Other';
+        }
+      });
+    }
     _recalculate();
   }
 
@@ -1064,7 +1071,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
                       _gammaCtrl.text = gas.gamma.toString();
                       _updating = false;
                       setState(() => _selectedGasName = gas.name);
-                      _onGammaChanged(gas.gamma.toString());
+                      _onGammaChanged(gas.gamma.toString(), fromDropdown: true);
                     },
                   ),
                 ],

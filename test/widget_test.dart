@@ -90,4 +90,35 @@ void main() {
     // Should display "Other"
     expect(find.text('Other'), findsOneWidget);
   });
+
+  testWidgets('Disallow spaces in input fields test', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: IsentropicFlowScreen(),
+        ),
+      ),
+    );
+
+    final fields = find.byType(TextField);
+    final machFieldFinder = fields.at(1);
+
+    await tester.tap(machFieldFinder);
+    await tester.pumpAndSettle();
+    
+    // 1. Simulate typing a space after '1' (increment by 1 char, which is whitespace)
+    // This should be rejected by the formatter
+    await tester.enterText(machFieldFinder, '1 ');
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(machFieldFinder).controller?.text, '1');
+
+    // 2. Simulate pasting '0.    5' (multi-character insertion containing whitespace)
+    // This should be allowed by the formatter to show the error
+    await tester.enterText(machFieldFinder, '0.    5');
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(machFieldFinder).controller?.text, '0.    5');
+
+    // Verify "Invalid expression" is displayed
+    expect(find.text('Invalid expression'), findsOneWidget);
+  });
 }

@@ -76,7 +76,8 @@ enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, p0Ratio, fricFact, uRa
 //  Simple arithmetic expression evaluator
 // ─────────────────────────────────────────────
 double? _evalExpr(String input) {  // the entry point of parser, handles null condition or error condition
-  final s = input.trim().replaceAll(' ', '');
+  if (input.contains(RegExp(r'\s'))) return null;
+  final s = input.trim();
   if (s.isEmpty) return null;
   try {
     final result = _ExprParser(s).parse();
@@ -894,7 +895,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
   }
 
   void _onToggleFricSupersonic(bool val) {
-    if (_result == null) {
+    if (_result == null && _fricFactCtrl.text.trim().isEmpty) {
       setState(() => _isFricSupersonic = val);
       return;
     }
@@ -1307,7 +1308,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           context: context,
           field: _ActiveField.fricFact,
           label: 'Friction Parameter',
-          symbol: '4fL*/D',
+          symbol: 'fL*/D',
           controller: _fricFactCtrl,
           focusNode: _fricFactFocus,
           hintText: 'Must be > 0',
@@ -1530,6 +1531,27 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
               TextInputFormatter.withFunction((oldValue, newValue) {
                 final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
                 return newValue.copyWith(text: text);
+              }),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final replacedStart = oldValue.selection.start;
+                final replacedEnd = oldValue.selection.end;
+                int insertedLen;
+                if (replacedStart >= 0 && replacedEnd >= 0) {
+                  final replacedLen = replacedEnd - replacedStart;
+                  insertedLen = newValue.text.length - (oldValue.text.length - replacedLen);
+                } else {
+                  insertedLen = newValue.text.length - oldValue.text.length;
+                }
+                if (insertedLen == 1) {
+                  final offset = newValue.selection.baseOffset;
+                  if (offset > 0 && offset <= newValue.text.length) {
+                    final added = newValue.text.substring(offset - 1, offset);
+                    if (RegExp(r'\s').hasMatch(added)) {
+                      return oldValue;
+                    }
+                  }
+                }
+                return newValue;
               }),
             ],
             autocorrect: false,

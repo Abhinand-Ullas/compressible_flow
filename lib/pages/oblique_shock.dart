@@ -77,7 +77,8 @@ enum _OSField { none, m1, theta, beta, m1n }
 //  Simple arithmetic expression evaluator
 // ─────────────────────────────────────────────
 double? _evalExpr(String input) {
-  final s = input.trim().replaceAll(' ', '');
+  if (input.contains(RegExp(r'\s'))) return null;
+  final s = input.trim();
   if (s.isEmpty) return null;
   try {
     final result = _ExprParser(s).parse();
@@ -1491,6 +1492,27 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
               TextInputFormatter.withFunction((oldValue, newValue) {
                 final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
                 return newValue.copyWith(text: text);
+              }),
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final replacedStart = oldValue.selection.start;
+                final replacedEnd = oldValue.selection.end;
+                int insertedLen;
+                if (replacedStart >= 0 && replacedEnd >= 0) {
+                  final replacedLen = replacedEnd - replacedStart;
+                  insertedLen = newValue.text.length - (oldValue.text.length - replacedLen);
+                } else {
+                  insertedLen = newValue.text.length - oldValue.text.length;
+                }
+                if (insertedLen == 1) {
+                  final offset = newValue.selection.baseOffset;
+                  if (offset > 0 && offset <= newValue.text.length) {
+                    final added = newValue.text.substring(offset - 1, offset);
+                    if (RegExp(r'\s').hasMatch(added)) {
+                      return oldValue;
+                    }
+                  }
+                }
+                return newValue;
               }),
             ],
             autocorrect: false,

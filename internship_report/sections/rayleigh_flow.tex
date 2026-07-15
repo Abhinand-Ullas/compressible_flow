@@ -201,11 +201,11 @@ In Rayleigh flow, $M$ is the pivot variable. $P/P^*$, $\rho/\rho^*$, and $U/U^*$
 \begin{center}
 \begin{tikzpicture}[x=1cm,y=1cm,
     inp/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
-                text width=3.8cm, minimum height=0.65cm, font=\small\sffamily},
+                text width=4.5cm, minimum height=0.65cm, font=\footnotesize\sffamily},
     eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
                 text width=3.4cm, font=\small\sffamily},
     outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
-                text width=2.4cm, minimum height=0.65cm, font=\small\sffamily},
+                text width=2.4cm, minimum height=0.65cm, font=\footnotesize\sffamily},
     note/.style={rectangle, draw=gray!60, dashed, fill=gray!5, align=center,
                  text width=2.0cm, minimum height=0.55cm, font=\scriptsize\sffamily},
     arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
@@ -213,25 +213,25 @@ In Rayleigh flow, $M$ is the pivot variable. $P/P^*$, $\rho/\rho^*$, and $U/U^*$
     bus/.style={thick, draw=orange!70!black}
 ]
 \node[inp] (i0) at (0, 0.0) {Case 1: $M$ (direct)};
-\node[inp] (i1) at (0, 0.9) {Case 2: $T/T^*$ $\to$ explicit+toggle};
-\node[inp] (i2) at (0, 1.8) {Case 3: $P/P^*$ $\to$ explicit};
-\node[inp] (i3) at (0, 2.7) {Case 4: $\rho/\rho^*$ $\to$ explicit};
-\node[inp] (i4) at (0, 3.6) {Case 5: $T_0/T_0^*$ $\to$ explicit+toggle};
-\node[inp] (i5) at (0, 4.5) {Case 6: $P_0/P_0^*$ $\to$ bisection};
-\node[inp] (i6) at (0, 5.4) {Case 7: $U/U^*$ $\to$ explicit};
-\node[note] (t1) at (4.3, 0.9) {Sub/Sup\\toggle};
-\node[note] (t2) at (4.3, 3.6) {Sub/Sup\\toggle};
-\node[note] (t3) at (4.3, 4.5) {Sub/Sup\\toggle};
-\node[eng, minimum height=6.0cm] (eng) at (7.2, 2.7)
+\node[inp] (i1) at (0, 1.1) {Case 2: $T/T^*$ $\to$ explicit+toggle};
+\node[inp] (i2) at (0, 2.2) {Case 3: $P/P^*$ $\to$ explicit};
+\node[inp] (i3) at (0, 3.3) {Case 4: $\rho/\rho^*$ $\to$ explicit};
+\node[inp] (i4) at (0, 4.4) {Case 5: $T_0/T_0^*$ $\to$ explicit+toggle};
+\node[inp] (i5) at (0, 5.5) {Case 6: $P_0/P_0^*$ $\to$ bisection};
+\node[inp] (i6) at (0, 6.6) {Case 7: $U/U^*$ $\to$ explicit};
+\node[note] (t1) at (4.8, 1.1) {Sub/Sup\\toggle};
+\node[note] (t2) at (4.8, 4.4) {Sub/Sup\\toggle};
+\node[note] (t3) at (4.8, 5.5) {Sub/Sup\\toggle};
+\node[eng, minimum height=7.2cm] (eng) at (7.6, 3.3)
     {\textbf{RayleighFlowEngine}\\[3pt]
     \texttt{fromMach(M,\,$\gamma$)}};
-\node[outn] (o0) at (12.0, 0.0) {$M$};
-\node[outn] (o1) at (12.0, 0.9) {$T/T^*$};
-\node[outn] (o2) at (12.0, 1.8) {$P/P^*$};
-\node[outn] (o3) at (12.0, 2.7) {$\rho/\rho^*$};
-\node[outn] (o4) at (12.0, 3.6) {$T_0/T_0^*$};
-\node[outn] (o5) at (12.0, 4.5) {$P_0/P_0^*$};
-\node[outn] (o6) at (12.0, 5.4) {$U/U^*$};
+\node[outn] (o0) at (12.2, 0.0) {$M$};
+\node[outn] (o1) at (12.2, 1.1) {$T/T^*$};
+\node[outn] (o2) at (12.2, 2.2) {$P/P^*$};
+\node[outn] (o3) at (12.2, 3.3) {$\rho/\rho^*$};
+\node[outn] (o4) at (12.2, 4.4) {$T_0/T_0^*$};
+\node[outn] (o5) at (12.2, 5.5) {$P_0/P_0^*$};
+\node[outn] (o6) at (12.2, 6.6) {$U/U^*$};
 \foreach \i in {i0,i1,i2,i3,i4,i5,i6} {\draw[arr] (\i.east) -- (eng.west |- \i);}
 \draw[darr] (t1.east) -- (i1.east |- t1) -- (i1.east);
 \draw[darr] (t2.east) -- (i4.east |- t2) -- (i4.east);

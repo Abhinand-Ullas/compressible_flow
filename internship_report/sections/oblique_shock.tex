@@ -154,11 +154,11 @@ Oblique shock always requires two inputs: $M_1$ and one of $\{\beta,\theta,M_{1n
 \begin{center}
 \begin{tikzpicture}[x=1cm,y=1cm,
     case/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
-                 text width=4.0cm, minimum height=0.85cm, font=\small\sffamily},
+                 text width=4.5cm, minimum height=0.85cm, font=\footnotesize\sffamily},
     eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
-                text width=3.2cm, font=\small\sffamily},
+                text width=3.2cm, font= \small\sffamily},
     outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
-                text width=2.6cm, minimum height=0.65cm, font=\small\sffamily},
+                text width=2.6cm, minimum height=0.65cm, font=\footnotesize\sffamily},
     note/.style={rectangle, draw=gray!60, dashed, fill=gray!5, align=center,
                  text width=2.0cm, minimum height=0.55cm, font=\scriptsize\sffamily},
     arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
@@ -168,16 +168,16 @@ Oblique shock always requires two inputs: $M_1$ and one of $\{\beta,\theta,M_{1n
 \node[case] (c1) at (0, 0.0) {Case 1: $M_1$, $\beta$\\(direct)};
 \node[case] (c2) at (0, 1.4) {Case 2: $M_1$, $\theta$\\(cubic solver)};
 \node[case] (c3) at (0, 2.8) {Case 3: $M_1$, $M_{1n}$\\(explicit: $\beta=\sin^{-1}(M_{1n}/M_1)$)};
-\node[note] (tog) at (4.6, 1.4) {Weak/Strong\\toggle};
-\node[eng, minimum height=4.6cm] (eng) at (8.0, 1.4)
+\node[note] (tog) at (4.8, 1.4) {Weak/Strong\\toggle};
+\node[eng, minimum height=4.6cm] (eng) at (8.4, 1.4)
     {\textbf{ObliqueShockEngine}\\[3pt]
     \texttt{fromM1Beta}\\($M_1$, $\beta$, $\gamma$)};
-\node[outn] (o0) at (12.4, 0.0) {$\theta$};
-\node[outn] (o1) at (12.4, 0.9) {$M_2$};
-\node[outn] (o2) at (12.4, 1.8) {$T_2/T_1$};
-\node[outn] (o3) at (12.4, 2.7) {$P_2/P_1$};
-\node[outn] (o4) at (12.4, 3.6) {$\rho_2/\rho_1$};
-\node[outn] (o5) at (12.4, 4.5) {$P_{02}/P_{01}$};
+\node[outn] (o0) at (12.8, 0.0) {$\theta$};
+\node[outn] (o1) at (12.8, 0.9) {$M_2$};
+\node[outn] (o2) at (12.8, 1.8) {$T_2/T_1$};
+\node[outn] (o3) at (12.8, 2.7) {$P_2/P_1$};
+\node[outn] (o4) at (12.8, 3.6) {$\rho_2/\rho_1$};
+\node[outn] (o5) at (12.8, 4.5) {$P_{02}/P_{01}$};
 \foreach \i in {c1,c2,c3} {\draw[arr] (\i.east) -- (eng.west |- \i);}
 \draw[darr] (tog.east) -- (c2.east |- tog) -- (c2.east);
 \coordinate (bx) at ($(eng.east)+(0.5,0)$);

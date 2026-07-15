@@ -1,5 +1,7 @@
 \chapter{Oblique Shock}
 
+An oblique shock occurs when a supersonic flow encounters a wedge, ramp, or sharp corner and is deflected by an angle $\theta$ (the turn angle or deflection angle). Unlike a normal shock, the wave is tilted at the shock angle $\beta$ to the incoming flow, and --- for the weak shock solution --- the downstream flow remains supersonic. The analysis decomposes the upstream flow into a normal component $M_{1n} = M_1 \sin\beta$ (which crosses the shock like a normal shock) and a tangential component that passes unchanged. This makes oblique shock analysis significantly more complex than normal shocks because two independent inputs ($M_1$ and one of $\beta$, $\theta$, or $M_{1n}$) are required to define the problem uniquely, and the relationship between $\theta$, $\beta$, and $M_1$ involves solving a cubic equation. This module was recreated from the legacy toolkit codebase originally developed by Gowtham Sivaraman \cite{sivaraman2015}.
+
 \section{Nomenclature}
 
 \begin{center}
@@ -143,112 +145,46 @@ Once $\beta$ is resolved, downstream properties are calculated using Case 1 form
 Once $\beta$ is resolved, downstream properties are calculated using Case 1 formulas.
 
 
+
+
 \section{Program Flow and Architecture}
 
-The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
-
-\subsection{Architecture Overview}
-
-The architecture is composed of the following key elements:
-\begin{itemize}
-    \item \textbf{ObliqueShockScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on whether weak or strong branches are active.
-    \item \textbf{ObliqueShockEngine (Logic Layer):} Contains pure mathematical solvers that execute the oblique shock equations of state. It handles both direct evaluations and numerical inversions (explicit and cubic solvers).
-    \item \textbf{ObliqueShockResult (Data Model):} An immutable data object that wraps the solved parameters ($M_1, \theta, \beta, M_{1n}, \theta_{max}, M_2, M_{2n}, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}$), transferring them back to the controller.
-    \item \textbf{\_GasEntry (Gas Preset Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
-\end{itemize}
-
-Below is the UML diagram showing the class relationships and sequence of interactions:
+Oblique shock always requires two inputs: $M_1$ and one of $\{\beta,\theta,M_{1n}\}$. There is no single-pivot inversion as in other flows.
 
 \begin{center}
-\begin{tikzpicture}[
-    node distance=1.6cm and 1.2cm,
-    block/.style={
-        draw=blue!70!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=blue!5,
-        align=left,
-        text width=6.5cm,
-        minimum height=1.6cm,
-        font=\small\sffamily
-    },
-    model/.style={
-        draw=green!60!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=green!5,
-        align=left,
-        text width=4.8cm,
-        minimum height=1.3cm,
-        font=\small\sffamily
-    },
-    arrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        draw=black!70
-    },
-    dottedarrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        dashed,
-        draw=black!70
-    }
+\begin{tikzpicture}[x=1cm,y=1cm,
+    case/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
+                 text width=4.0cm, minimum height=0.85cm, font=\small\sffamily},
+    eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
+                text width=3.2cm, font=\small\sffamily},
+    outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
+                text width=2.6cm, minimum height=0.65cm, font=\small\sffamily},
+    note/.style={rectangle, draw=gray!60, dashed, fill=gray!5, align=center,
+                 text width=2.0cm, minimum height=0.55cm, font=\scriptsize\sffamily},
+    arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
+    darr/.style={-{Stealth[scale=1.0]}, thick, dashed, draw=black!50},
+    bus/.style={thick, draw=orange!70!black}
 ]
-
-% Nodes
-\node[block] (ui) {
-    \textbf{ObliqueShockScreen (UI Controller)} \\
-    \vspace{0.1cm}
-    \textbullet\ Captures user inputs ($M_1$, $\theta$, $\beta$, or $M_{1n}$) \\
-    \textbullet\ Parses math expressions \& validates bounds \\
-    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
-    \textbullet\ Controls active/computed field styles and toggles
-};
-
-\node[block, below=of ui] (engine) {
-    \textbf{ObliqueShockEngine (Computation Core)} \\
-    \vspace{0.1cm}
-    \textbullet\ Solves direct relations from upstream Mach $M_1$ and $\beta$ \\
-    \textbullet\ Inverts equations of state analytically (cubic solver) \\
-    \textbullet\ Computes theta maximum limit $\theta_{max}$ and $\beta_{\theta_{max}}$
-};
-
-\node[model, below left=of engine, xshift=1.2cm] (preset) {
-    \textbf{\_GasEntry (Gas Preset)} \\
-    \vspace{0.05cm}
-    \textbullet\ Preset gas names \\
-    \textbullet\ Custom or default $\gamma$
-};
-
-\node[model, below right=of engine, xshift=-1.2cm] (result) {
-    \textbf{ObliqueShockResult (Data Output)} \\
-    \vspace{0.05cm}
-    \textbullet\ $M_1, \theta, \beta, M_{1n}, \theta_{max}, M_2, M_{2n}, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}$
-};
-
-% Connections
-\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
-\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
-\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
-\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
-
+\node[case] (c1) at (0, 0.0) {Case 1: $M_1$, $\beta$\\(direct)};
+\node[case] (c2) at (0, 1.4) {Case 2: $M_1$, $\theta$\\(cubic solver)};
+\node[case] (c3) at (0, 2.8) {Case 3: $M_1$, $M_{1n}$\\(explicit: $\beta=\sin^{-1}(M_{1n}/M_1)$)};
+\node[note] (tog) at (4.6, 1.4) {Weak/Strong\\toggle};
+\node[eng, minimum height=4.6cm] (eng) at (8.0, 1.4)
+    {\textbf{ObliqueShockEngine}\\[3pt]
+    \texttt{fromM1Beta}\\($M_1$, $\beta$, $\gamma$)};
+\node[outn] (o0) at (12.4, 0.0) {$\theta$};
+\node[outn] (o1) at (12.4, 0.9) {$M_2$};
+\node[outn] (o2) at (12.4, 1.8) {$T_2/T_1$};
+\node[outn] (o3) at (12.4, 2.7) {$P_2/P_1$};
+\node[outn] (o4) at (12.4, 3.6) {$\rho_2/\rho_1$};
+\node[outn] (o5) at (12.4, 4.5) {$P_{02}/P_{01}$};
+\foreach \i in {c1,c2,c3} {\draw[arr] (\i.east) -- (eng.west |- \i);}
+\draw[darr] (tog.east) -- (c2.east |- tog) -- (c2.east);
+\coordinate (bx) at ($(eng.east)+(0.5,0)$);
+\draw[bus] (eng.east) -- (bx);
+\draw[bus] (bx |- o0) -- (bx |- o5);
+\foreach \n in {o0,o1,o2,o3,o4,o5} {\draw[arr] (bx |- \n) -- (\n.west);}
 \end{tikzpicture}
 \end{center}
 
-\subsection{Logical Execution Flow}
-
-When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
-
-\begin{enumerate}
-    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
-    \item \textbf{Input Capturing and Verification:} The user enters values for the primary variables ($M_1$ and another parameter). The UI controller parses the input expressions and validates that they comply with physical bounds (e.g., $M_1 > 1$, $\beta > \mu_1$).
-    \item \textbf{Inversion of Input to Shock Angle:} The validated input is sent to the \textit{ObliqueShockEngine} along with $\gamma$ and $M_1$:
-    \begin{itemize}
-        \item For explicit parameters ($\beta$, $M_{1n}$), the engine computes $\beta$ directly or analytically in closed form ($\beta = \sin^{-1}(M_{1n}/M_1)$).
-        \item For the turn angle ($\theta$), the engine solves the analytical cubic equation for $\sin^2\beta$, checks for detached shock states ($\Delta > 0$), and returns the weak or strong shock angle $\beta$ based on the selected UI branch toggle.
-    \end{itemize}
-    \item \textbf{Direct Forward Calculation:} Once $M_1$ and $\beta$ are known, the engine evaluates all other properties ($M_{1n}$, $\theta$, $M_{2n}$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$) directly using standard explicit relations.
-    \item \textbf{Presentation of Results:} The computed variables are packaged into an \textit{ObliqueShockResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
-\end{enumerate}
+\noindent Case~1 feeds the engine directly. Case~2 requires solving the $\theta$--$\beta$--$M$ cubic analytically; the weak/strong toggle selects the physical root. Case~3 recovers $\beta = \sin^{-1}(M_{1n}/M_1)$ explicitly. There is no all-property inversion as in 1D flow types.

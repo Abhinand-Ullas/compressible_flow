@@ -1,0 +1,180 @@
+\chapter{Software and Architecture}
+
+\section{Technology Stack}
+
+The Compressible Flow Toolkit (CFTK) is built entirely on the Flutter framework using the Dart programming language. The table below summarises the core technology choices.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Technology / Choice} \\
+\midrule
+Programming Language & Dart \\
+UI Framework & Flutter (Material 3) \\
+Target Platforms & Android, Web, Desktop (single codebase) \\
+UI Design Pattern & Stateful Widget + decoupled computation engine \\
+Math / Core Library & \texttt{dart:math} (standard library) \\
+Expression Parser & Custom recursive-descent parser (built-in) \\
+State Management & \texttt{setState} with \texttt{TextEditingController} per field \\
+Version Control & Git \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Application Architecture}
+
+The application follows a strict three-layer architecture that decouples the user interface from the physical computation and the data representation.
+
+\begin{enumerate}
+    \item \textbf{UI Layer (Screen Widgets):} Each flow type has a dedicated \texttt{StatefulWidget} screen (e.g.\ \texttt{IsentropicFlowScreen}, \texttt{FannoFlowScreen}). The screen manages text field controllers, focus nodes, gas selection state, toggle states, and error messages. It calls the engine layer when input changes and populates computed fields from the returned result.
+    \item \textbf{Logic Layer (Engine Classes):} Each screen has a companion pure-computation class (e.g.\ \texttt{IsentropicEngine}, \texttt{FannoFlowEngine}). These classes contain no Flutter dependencies — only \texttt{dart:math}. They implement all governing equations, numerical inversion solvers (Newton--Raphson, bisection, cubic solver, RK45), and limit calculations.
+    \item \textbf{Data Layer (Result Objects and Gas Presets):} Immutable result objects (e.g.\ \texttt{IsentropicResult}, \texttt{FannoResult}) transfer computed properties from engine to screen. A shared \texttt{\_GasEntry} list provides sixteen predefined gas presets with their specific heat ratios.
+\end{enumerate}
+
+\section{Generic Application Flow (UML)}
+
+The diagram below shows the top-level user interaction flow common to all seven modules of the application.
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=0.55cm and 1.0cm,
+    startstop/.style={ellipse, draw=black!70, thick, fill=gray!10, align=center,
+                      minimum width=2.4cm, minimum height=0.9cm, font=\small\sffamily},
+    process/.style={rectangle, draw=blue!70!black, thick, fill=blue!5, align=center,
+                    text width=4.8cm, minimum height=0.85cm, font=\small\sffamily},
+    module/.style={rectangle, draw=blue!50!black, thick, fill=blue!10, align=center,
+                   text width=2.0cm, minimum height=0.75cm, font=\scriptsize\sffamily},
+    decision/.style={diamond, draw=orange!80!black, thick, fill=orange!8, align=center,
+                     aspect=2.8, inner sep=1pt, font=\small\sffamily},
+    sideblock/.style={rectangle, draw=red!60!black, thick, fill=red!5, align=center,
+                      text width=2.8cm, minimum height=0.75cm, font=\small\sffamily},
+    arrow/.style={-{Stealth[scale=1.1]}, thick, draw=black!70},
+    dasharrow/.style={-{Stealth[scale=1.1]}, thick, dashed, draw=black!50}
+]
+
+%--- Nodes ---
+\node[startstop] (start) {App Start};
+
+\node[process, below=of start] (select)
+    {Select Flow Type};
+
+% Module row
+\node[module, below=0.7cm of select, xshift=-6.2cm] (sa) {Standard\\Atmosphere};
+\node[module, right=0.18cm of sa] (is) {Isentropic\\Flow};
+\node[module, right=0.18cm of is] (ns) {Normal\\Shock};
+\node[module, right=0.18cm of ns] (os) {Oblique\\Shock};
+\node[module, right=0.18cm of os] (ff) {Fanno\\Flow};
+\node[module, right=0.18cm of ff] (rf) {Rayleigh\\Flow};
+\node[module, right=0.18cm of rf] (cs) {Conical\\Shock};
+
+\node[process, below=0.7cm of ns, xshift=2.9cm] (enterinput)
+    {Enter Required Inputs\\($\gamma$, Mach, \ldots)};
+
+\node[decision, below=of enterinput] (valid1) {Valid?};
+
+\node[process, below=of valid1] (knownval)
+    {Input Known Value\\(property or parameter)};
+
+\node[decision, below=of knownval] (valid2) {Valid?};
+
+\node[process, below=of valid2] (calc)
+    {Calculate\_flow\_prop()};
+
+\node[process, below=of calc] (output)
+    {Output\_flow\_prop()};
+
+% Side blocks
+\node[sideblock, right=2.2cm of valid1] (clearout)
+    {Set Output\\to Empty};
+
+\node[sideblock, left=2.5cm of output] (edit)
+    {Edit Flow\\Properties};
+
+%--- Edges ---
+\draw[arrow] (start) -- (select);
+
+% Select → module row (one arrow to centre, then span)
+\draw[arrow] (select) -- ++(0,-0.38) -| (sa.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (is.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (ns.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (os.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (ff.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (rf.north);
+\draw[arrow] (select) -- ++(0,-0.38) -| (cs.north);
+
+% Module row → enterinput
+\draw[arrow] (sa.south) -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (is.south)  -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (ns.south)  -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (os.south)  -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (ff.south)  -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (rf.south)  -- ++(0,-0.22) -| (enterinput.north);
+\draw[arrow] (cs.south)  -- ++(0,-0.22) -| (enterinput.north);
+
+\draw[arrow] (enterinput.south) -- (valid1.north);
+\draw[arrow] (valid1.south) -- node[left,font=\scriptsize\sffamily]{Yes} (knownval.north);
+\draw[arrow] (valid1.east) -- node[above,font=\scriptsize\sffamily]{No} (clearout.west);
+\draw[dasharrow] (clearout.south) -- ++(0,-0.3) -| (enterinput.east);
+
+\draw[arrow] (knownval.south) -- (valid2.north);
+\draw[arrow] (valid2.south) -- node[left,font=\scriptsize\sffamily]{Yes} (calc.north);
+\draw[dasharrow] (valid2.east) -- ++(0.6,0) |- node[right,font=\scriptsize\sffamily]{No} (knownval.east);
+
+\draw[arrow] (calc.south) -- (output.north);
+\draw[arrow] (output.west) -- (edit.east);
+\draw[dasharrow] (edit.north) -- ++(0,0.3) -| (knownval.west);
+
+\end{tikzpicture}
+\end{center}
+
+\section{Application Features}
+
+The following features are common across all flow type modules in the application.
+
+\subsection*{Instant Solver}
+Entering a value into any input field immediately triggers the computation engine. All other properties are computed and populated in their respective output fields automatically — no submit button is required. If the input is cleared, the outputs are reset to empty.
+
+\subsection*{Gas Preset Selector}
+A dropdown menu in the header card provides sixteen predefined gases with their specific heat ratios ($\gamma$). Selecting a preset automatically populates the $\gamma$ field. The user can also type custom gamma values.
+
+\subsection*{Expression Evaluator}
+All numeric input fields accept standard mathematical expressions in addition to plain numbers. A custom recursive-descent parser built into the application evaluates expressions supporting addition (\texttt{+}), subtraction (\texttt{-}), multiplication (\texttt{*}), division (\texttt{/}), exponentiation (\texttt{\^}), unary negation, and nested parentheses.
+
+\subsection*{Reciprocal Toggle}
+A toggle button in the header card inverts all displayed ratio fields simultaneously. For example, in isentropic flow it switches the display between $T/T_0 \leftrightarrow T_0/T$, $P/P_0 \leftrightarrow P_0/P$, and $\rho/\rho_0 \leftrightarrow \rho_0/\rho$.
+
+\subsection*{HandyCalc Utility}
+A small compare icon appears next to each ratio output field. Tapping it opens an inline auxiliary calculator that converts the displayed ratio to the corresponding absolute property value, given user-supplied reference conditions.
+
+\subsection*{Subsonic / Supersonic Branch Toggle}
+Several flow cases have two mathematically valid solutions for the same input — a subsonic branch and a supersonic branch. A clearly labelled toggle in the input card lets the user select the desired branch before the solver runs. The engine uses the toggle state to select the appropriate initial guess or search interval.
+
+\section{Application User Interface}
+
+To illustrate the visual presentation and layout of the developed applet, actual user interface screenshots from the mobile implementation are shown below:
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img1.jpeg}
+        \caption{Isentropic Flow Screen}
+        \label{fig:ui1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img2.jpeg}
+        \caption{Normal Shock Screen}
+        \label{fig:ui2}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img3.jpeg}
+        \caption{Std. Atmosphere Screen}
+        \label{fig:ui3}
+    \end{subfigure}
+    \caption{Compressible Flow Toolkit (CFTK) Applet User Interface Screens}
+    \label{fig:ui_screens}
+\end{figure}

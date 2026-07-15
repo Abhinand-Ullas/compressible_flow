@@ -1,5 +1,7 @@
 \chapter{Standard Atmosphere (1976)}
 
+The 1976 US Standard Atmosphere is a reference model that defines how air properties --- temperature, pressure, and density --- change with altitude from sea level up to approximately 85 km. The atmosphere is divided into seven stacked layers, each with a fixed base temperature and a constant lapse rate (or zero for isothermal layers). This model is widely used as a standard reference baseline for aircraft performance analysis, propulsion calculations, and aerodynamic design, providing consistent, internationally agreed-upon values of air properties at any altitude. The calculations and layer constants are implemented in reference to the official U.S. Standard Atmosphere model \cite{std_atmos1976}.
+
 \section{Nomenclature}
 
 \begin{center}
@@ -56,11 +58,6 @@ from the ideal-gas law, the isentropic sound-speed relation, and
 Sutherland's law respectively, once $T$ and $P$ are known.
 
 \section{Layer Table}
-
-The base of each layer is defined by its geopotential altitude, base
-temperature, and lapse rate. Base pressures are generated recursively
-layer by layer starting from $P=101325$ Pa at $h=0$, so the whole table
-has a single source of truth.
 
 \begin{center}
 \begin{tabular}{@{}cccc@{}}
@@ -194,111 +191,50 @@ The dynamic viscosity of air is modeled as a function of temperature using Suthe
 
 \section{Program Flow and Architecture}
 
-The software architecture is structured to enforce a clear separation of concerns between the user interface, the physical model computation, and the data representation. This ensures that the computational logic remains independent of the presentation layer.
-
-\subsection{Architecture Overview}
-
-The system consists of the following primary components:
-\begin{itemize}
-    \item \textbf{StandardAtmosphereScreen (UI Layer):} Manages the state of the input fields, performs arithmetic expression parsing, validates that the inputs lie within physical bounds, and binds the computed results back to the screen.
-    \item \textbf{AtmosphereEngine (Logic Layer):} Contains the physical constants and the atmospheric layer table. It exposes methods to locate the correct altitude layer and solve the equations of state analytically.
-    \item \textbf{AtmosphereResult (Data Model):} A simple, immutable container that stores the calculated state (altitude, pressure, density, temperature, speed of sound, and viscosity).
-    \item \textbf{\_AtmLayer (Supporting Model):} Represents a single atmospheric layer, defined by its lower boundary altitude, upper boundary altitude, base temperature, base pressure, and temperature lapse rate.
-\end{itemize}
-
-Below is the UML diagram showing the structure and sequence of data flow between these components:
+The Standard Atmosphere module accepts exactly one of three inputs and produces all atmospheric outputs via closed-form ISA layer equations.
 
 \begin{center}
-\begin{tikzpicture}[
-    node distance=1.6cm and 1.2cm,
-    block/.style={
-        draw=blue!70!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=blue!5,
-        align=left,
-        text width=6.5cm,
-        minimum height=1.6cm,
-        font=\small\sffamily
-    },
-    model/.style={
-        draw=green!60!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=green!5,
-        align=left,
-        text width=4.8cm,
-        minimum height=1.3cm,
-        font=\small\sffamily
-    },
-    arrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        draw=black!70
-    },
-    dottedarrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        dashed,
-        draw=black!70
-    }
+\begin{tikzpicture}[x=1cm,y=-1cm,
+    inp/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
+                text width=3.2cm, minimum height=0.7cm, font=\small\sffamily},
+    eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
+                text width=3.8cm, font=\small\sffamily},
+    outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
+                text width=2.8cm, minimum height=0.7cm, font=\small\sffamily},
+    arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
+    bus/.style={thick, draw=orange!70!black}
 ]
-
-% Nodes
-\node[block] (ui) {
-    \textbf{StandardAtmosphereScreen (UI Controller)} \\
-    \vspace{0.1cm}
-    \textbullet\ Captures user inputs ($h$, $P$, or $\rho$) \\
-    \textbullet\ Parses math expressions \\
-    \textbullet\ Validates input bounds \\
-    \textbullet\ Manages focus and populates outputs
-};
-
-\node[block, below=of ui] (engine) {
-    \textbf{AtmosphereEngine (Computation Core)} \\
-    \vspace{0.1cm}
-    \textbullet\ Builds layer table recursively on startup \\
-    \textbullet\ Performs monotonic scans to locate layers \\
-    \textbullet\ Inverts equations of state analytically \\
-    \textbullet\ Computes speed of sound and viscosity
-};
-
-\node[model, below left=of engine, xshift=1.2cm] (layer) {
-    \textbf{\_AtmLayer (Layer Config)} \\
-    \vspace{0.05cm}
-    \textbullet\ $h_{base}, h_{top}, T_{base}, P_{base}, L$
-};
-
-\node[model, below right=of engine, xshift=-1.2cm] (result) {
-    \textbf{AtmosphereResult (Data Output)} \\
-    \vspace{0.05cm}
-    \textbullet\ $h, P, \rho, T, a, \mu$
-};
-
-% Connections
-\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
-\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (layer);
-\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
-\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
-
+%--- Inputs (y increases downward) ---
+\node[inp] (h)   at (0, 0.4) {Case 1: Altitude $h$};
+\node[inp] (Pn)  at (0, 1.4) {Case 2: Pressure $P$};
+\node[inp] (rho) at (0, 2.4) {Case 3: Density $\rho$};
+%--- Engine ---
+\node[eng, minimum height=2.4cm] (eng) at (4.8, 1.4)
+    {\textbf{AtmosphereEngine}\\[3pt]
+    Layer lookup\\[-1pt]
+    Closed-form solve\\[-1pt]
+    Sutherland viscosity};
+%--- Outputs ---
+\node[outn] (T1) at (9.4, 0.0) {Temperature $T$};
+\node[outn] (P1) at (9.4, 0.9) {Pressure $P$};
+\node[outn] (R1) at (9.4, 1.8) {Density $\rho$};
+\node[outn] (A1) at (9.4, 2.7) {Speed of sound $a$};
+\node[outn] (M1) at (9.4, 3.6) {Viscosity $\mu$};
+%--- Input arrows ---
+\draw[arr] (h.east)   -- (eng.west |- h.east);
+\draw[arr] (Pn.east)  -- (eng.west);
+\draw[arr] (rho.east) -- (eng.west |- rho.east);
+%--- Bus on right of engine ---
+\coordinate (busX) at ($(eng.east)+(0.55,0)$);
+\draw[bus] (eng.east) -- (busX);
+\draw[bus] (busX |- T1) -- (busX |- M1);
+%--- Output arrows ---
+\draw[arr] (busX |- T1) -- (T1.west);
+\draw[arr] (busX |- P1) -- (P1.west);
+\draw[arr] (busX |- R1) -- (R1.west);
+\draw[arr] (busX |- A1) -- (A1.west);
+\draw[arr] (busX |- M1) -- (M1.west);
 \end{tikzpicture}
 \end{center}
 
-\subsection{Logical Execution Flow}
-
-When the user interacts with the toolkit, the application follows a synchronous, deterministic flow:
-
-\begin{enumerate}
-    \item \textbf{Layer Table Initialization:} At application startup, the \textit{AtmosphereEngine} initializes the layered table. Using the standard altitudes and lapse rates, it recursively builds the base pressures of all seven layers from the ground up, starting from a sea-level pressure of $101{,}325$ Pa. This maintains a single source of truth.
-    \item \textbf{Input Expression Evaluation:} When a user types into an input field (e.g. Geopotential Altitude), the UI controller parses the input string, allowing arithmetic expressions (such as addition, subtraction, division, and exponents). 
-    \item \textbf{Bound Validation:} The parsed numerical value is checked against the physical limits of the 1976 model. If the value is out of bounds or invalid, an error message is displayed, and the outputs are cleared.
-    \item \textbf{Layer Location:} Once a valid input is verified, it is passed to the engine. The engine runs a monotonic scan through the layer table:
-    \begin{itemize}
-        \item For altitude, it locates the layer whose altitude range contains the input.
-        \item For pressure/density, since they decrease monotonically with altitude, it scans from the ground up until the input value lies above the layer's upper boundary value.
-    \end{itemize}
-    \item \textbf{Analytic Calculation:} The properties are calculated using the exact closed-form relation of the located layer. If pressure or density was supplied, the lapse-rate or isothermal equations are inverted analytically to solve for temperature and altitude.
-    \item \textbf{Derived Outputs and Presentation:} Finally, the engine evaluates the speed of sound and calculates dynamic viscosity using Sutherland's law. These values are returned to the UI controller inside an \textit{AtmosphereResult} object, which automatically populates and formats the remaining fields on the screen.
-\end{enumerate}
+\noindent The user provides one of $h$, $P$, or $\rho$. The engine finds the correct ISA layer, inverts the layer equations analytically for temperature and altitude, then computes $a=\sqrt{\gamma R T}$ and $\mu$ via Sutherland's law. All paths are closed-form; no iteration is required.

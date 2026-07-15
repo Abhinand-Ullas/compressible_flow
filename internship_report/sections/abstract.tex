@@ -1,0 +1,16 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\vspace{1cm}
+
+\begin{justify}
+
+The primary objective of this project was to rebuild and extend the legacy \textit{Compressible Flow Toolkit} (CFTK) into a modern, cross-platform mobile application. The legacy version, developed in Java by Gowtham Sivaraman \cite{sivaraman2015}, covered five core flow regimes: Isentropic Flow, Normal Shock, Oblique Shock, Fanno Flow, and Rayleigh Flow. In this work, the original Java source code was analyzed to extract and understand the underlying computational logic, which was then recreated in Flutter and Dart using a responsive and decoupled software architecture. Additionally, the application was expanded with two new modules—Standard Atmosphere and Conical Shock—and new features such as reciprocal ratio toggling.
+
+The project focused on designing a clean software architecture and implementing efficient numerical algorithms. The application is built using a decoupled three-layer structure: the User Interface (UI) layer, the computation engine layer, and the data layer. This separation keeps the complex mathematical solvers completely independent of the visual components, making the codebase highly modular, easy to maintain, and testable. 
+
+To provide a seamless user experience, the application features an "instant solver" flow. Entering a value in any input field immediately triggers the computation engine, which solves the governing equations and updates the remaining fields in real-time. The input fields also support arithmetic expression evaluation using a custom-built parser. To solve the underlying gas dynamics equations, the computation engine implements various root-finding algorithms (such as the Newton--Raphson and bisection methods) and adaptive numerical integration (RK45) for differential equations.
+
+Ultimately, this project successfully combines software engineering, numerical methods, and an efficient computational solver. The resulting application is fully optimized, tested, and prepared for public release on the Google Play Store.
+
+\end{justify}

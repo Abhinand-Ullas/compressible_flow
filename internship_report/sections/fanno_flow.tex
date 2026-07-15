@@ -1,5 +1,7 @@
 \chapter{Fanno Flow}
 
+Fanno flow describes compressible, adiabatic flow through a constant-area duct where friction is the dominant effect. Friction continuously drives the flow toward the sonic condition (Mach 1), the critical point. For subsonic inlet flow, friction accelerates the flow toward $M = 1$; for supersonic inlet flow, friction decelerates the flow toward $M = 1$. The friction parameter $fL^*/D$ (where $f$ is the Darcy friction factor, $L^*$ is the length needed to reach sonic conditions, and $D$ is the duct diameter) quantifies how much duct is available relative to the critical length. Fanno flow is widely used in modelling pipe flow in propulsion systems and high-speed internal flows. This module was recreated from the legacy toolkit codebase originally developed by Gowtham Sivaraman \cite{sivaraman2015}.
+
 \section{Nomenclature}
 
 \begin{center}
@@ -173,113 +175,50 @@ M = \frac{2\times\frac{U}{U^*}}{\sqrt{2\gamma+2-\left(2\left(\frac{U}{U^*}\right
 \end{equation}
 
 
+
 \section{Program Flow and Architecture}
 
-The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
-
-\subsection{Architecture Overview}
-
-The architecture is composed of the following key elements:
-\begin{itemize}
-    \item \textbf{FannoFlowScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on whether subsonic or supersonic branches are active.
-    \item \textbf{FannoFlowEngine (Logic Layer):} Contains pure mathematical solvers that execute the Fanno flow equations of state. It handles both direct evaluations and numerical inversions (explicit and bisection solvers).
-    \item \textbf{FannoResult (Data Model):} An immutable data object that wraps the solved parameters ($M, \frac{T}{T^*}, \frac{P}{P^*}, \frac{\rho}{\rho^*}, \frac{P_0}{P_0^*}, \frac{f L^*}{D}, \frac{U}{U^*}$), transferring them back to the controller.
-    \item \textbf{\_GasEntry (Gas Preset Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
-\end{itemize}
-
-Below is the UML diagram showing the class relationships and sequence of interactions:
+In Fanno flow, $M$ is the pivot variable. Five inputs use explicit inversion; $P_0/P_0^*$ and $fL^*/D$ use bisection with the sub/supersonic toggle.
 
 \begin{center}
-\begin{tikzpicture}[
-    node distance=1.6cm and 1.2cm,
-    block/.style={
-        draw=blue!70!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=blue!5,
-        align=left,
-        text width=6.5cm,
-        minimum height=1.6cm,
-        font=\small\sffamily
-    },
-    model/.style={
-        draw=green!60!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=green!5,
-        align=left,
-        text width=4.8cm,
-        minimum height=1.3cm,
-        font=\small\sffamily
-    },
-    arrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        draw=black!70
-    },
-    dottedarrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        dashed,
-        draw=black!70
-    }
+\begin{tikzpicture}[x=1cm,y=1cm,
+    inp/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
+                text width=3.8cm, minimum height=0.65cm, font=\small\sffamily},
+    eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
+                text width=3.4cm, font=\small\sffamily},
+    outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
+                text width=2.4cm, minimum height=0.65cm, font=\small\sffamily},
+    note/.style={rectangle, draw=gray!60, dashed, fill=gray!5, align=center,
+                 text width=2.0cm, minimum height=0.55cm, font=\scriptsize\sffamily},
+    arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
+    darr/.style={-{Stealth[scale=1.0]}, thick, dashed, draw=black!50},
+    bus/.style={thick, draw=orange!70!black}
 ]
-
-% Nodes
-\node[block] (ui) {
-    \textbf{FannoFlowScreen (UI Controller)} \\
-    \vspace{0.1cm}
-    \textbullet\ Captures user inputs ($M$, $\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{P_0}{P_0^*}$, $\frac{f L^*}{D}$, or $\frac{U}{U^*}$) \\
-    \textbullet\ Parses math expressions \& validates bounds \\
-    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
-    \textbullet\ Controls active/computed field styles and toggles
-};
-
-\node[block, below=of ui] (engine) {
-    \textbf{FannoFlowEngine (Computation Core)} \\
-    \vspace{0.1cm}
-    \textbullet\ Solves direct relations from Mach $M$ \\
-    \textbullet\ Inverts equations of state analytically \\
-    \textbullet\ Solves implicit cases via bisection \\
-    \textbullet\ Computes theoretical limits ($\left(\frac{T}{T^*}\right)_{max}$, $\left(\frac{f L^*}{D}\right)_{sup,max}$)
-};
-
-\node[model, below left=of engine, xshift=1.2cm] (preset) {
-    \textbf{\_GasEntry (Gas Preset)} \\
-    \vspace{0.05cm}
-    \textbullet\ Preset gas names \\
-    \textbullet\ Custom or default $\gamma$
-};
-
-\node[model, below right=of engine, xshift=-1.2cm] (result) {
-    \textbf{FannoResult (Data Output)} \\
-    \vspace{0.05cm}
-    \textbullet\ $M$, $\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{P_0}{P_0^*}$, $\frac{f L^*}{D}$, $\frac{U}{U^*}$
-};
-
-% Connections
-\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
-\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
-\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
-\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
-
+\node[inp] (i0) at (0, 0.0) {Case 1: $M$ (direct)};
+\node[inp] (i1) at (0, 0.9) {Case 2: $T/T^*$ $\to$ explicit};
+\node[inp] (i2) at (0, 1.8) {Case 3: $P/P^*$ $\to$ explicit};
+\node[inp] (i3) at (0, 2.7) {Case 4: $\rho/\rho^*$ $\to$ explicit};
+\node[inp] (i4) at (0, 3.6) {Case 5: $P_0/P_0^*$ $\to$ bisection};
+\node[inp] (i5) at (0, 4.5) {Case 6: $fL^*/D$ $\to$ bisection};
+\node[inp] (i6) at (0, 5.4) {Case 7: $U/U^*$ $\to$ explicit};
+\node[note] (t1) at (4.3, 3.6) {Sub/Sup\\toggle};
+\node[note] (t2) at (4.3, 4.5) {Sub/Sup\\toggle};
+\node[eng, minimum height=6.0cm] (eng) at (7.2, 2.7)
+    {\textbf{FannoFlowEngine}\\[3pt]
+    \texttt{fromMach(M,\,$\gamma$)}};
+\node[outn] (o0) at (11.8, 0.0) {$M$};
+\node[outn] (o1) at (11.8, 0.9) {$T/T^*$};
+\node[outn] (o2) at (11.8, 1.8) {$P/P^*$};
+\node[outn] (o3) at (11.8, 2.7) {$\rho/\rho^*$};
+\node[outn] (o4) at (11.8, 3.6) {$P_0/P_0^*$};
+\node[outn] (o5) at (11.8, 4.5) {$fL^*/D$};
+\node[outn] (o6) at (11.8, 5.4) {$U/U^*$};
+\foreach \i in {i0,i1,i2,i3,i4,i5,i6} {\draw[arr] (\i.east) -- (eng.west |- \i);}
+\draw[darr] (t1.east) -- (i4.east |- t1) -- (i4.east);
+\draw[darr] (t2.east) -- (i5.east |- t2) -- (i5.east);
+\coordinate (bx) at ($(eng.east)+(0.5,0)$);
+\draw[bus] (eng.east) -- (bx);
+\draw[bus] (bx |- o0) -- (bx |- o6);
+\foreach \n in {o0,o1,o2,o3,o4,o5,o6} {\draw[arr] (bx |- \n) -- (\n.west);}
 \end{tikzpicture}
 \end{center}
-
-\subsection{Logical Execution Flow}
-
-When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
-
-\begin{enumerate}
-    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
-    \item \textbf{Input Capturing and Verification:} The user enters a value in any of the active input boxes (e.g. pressure ratio $\frac{P}{P^*}$). The UI controller parses the input expression and runs validation checks to ensure it complies with physical bounds.
-    \item \textbf{Inversion of Input to Mach Number:} The validated input is sent to the \textit{FannoFlowEngine} along with the heat ratio $\gamma$:
-    \begin{itemize}
-        \item For explicit parameters ($\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{U}{U^*}$), the engine inverts the equations analytically to compute $M$ in closed form.
-        \item For implicit variables ($\frac{P_0}{P_0^*}$ or $\frac{f L^*}{D}$), the engine executes a bisection search solver, utilizing the subsonic/supersonic toggle to define search brackets and converging to a tolerance of $10^{-9}$.
-    \end{itemize}
-    \item \textbf{Direct Forward Calculation:} Once the Mach number $M$ is solved, the engine evaluates all other properties ($\frac{T}{T^*}, \frac{P}{P^*}, \frac{\rho}{\rho^*}, \frac{P_0}{P_0^*}, \frac{f L^*}{D}, \frac{U}{U^*}$) directly using the standard explicit relations.
-    \item \textbf{Presentation of Results:} The computed variables are packaged into a \textit{FannoResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
-\end{enumerate}

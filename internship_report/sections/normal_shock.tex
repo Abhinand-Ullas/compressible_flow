@@ -1,5 +1,7 @@
 \chapter{Normal Shock}
 
+A normal shock is a thin, abrupt compression wave that stands perpendicular to the flow direction. When supersonic flow hits this wave, it is decelerated instantaneously to subsonic speed, while pressure, temperature, and density all jump sharply across the shock. Normal shocks commonly occur in supersonic inlets, overexpanded nozzles, and in front of blunt bodies in supersonic flight. Because the shock is perpendicular to the flow, the problem is purely one-dimensional and all downstream properties can be computed from the upstream Mach number $M_1$ and the specific heat ratio $\gamma$ alone. This module was recreated from the legacy toolkit codebase originally developed by Gowtham Sivaraman \cite{sivaraman2015}.
+
 \section{Nomenclature}
 
 \begin{center}
@@ -219,113 +221,46 @@ M_1 = \frac{\left(\frac{\Delta V}{a_1}\times\frac{\gamma+1}{2}\right) + \sqrt{\l
 \end{equation}
 
 
+
+
 \section{Program Flow and Architecture}
 
-The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
-
-\subsection{Architecture Overview}
-
-The architecture is composed of the following key elements:
-\begin{itemize}
-    \item \textbf{NormalShockScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on input changes.
-    \item \textbf{NormalShockEngine (Logic Layer):} Contains pure mathematical solvers that execute the normal shock equations of state. It handles both direct evaluations and numerical inversions (explicit and iterative Newton--Raphson).
-    \item \textbf{NormalShockResult (Data Model):} An immutable data object that wraps the solved parameters ($M_1, M_2, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}, \frac{P_{02}}{P_1}, \frac{\Delta V}{a_1}$), transferring them back to the controller.
-    \item \textbf{\_GasEntry (Gas Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
-\end{itemize}
-
-Below is the UML diagram showing the class relationships and sequence of interactions:
+In normal shock, $M_1$ is the pivot variable. Every input is inverted to $M_1$, then all eight outputs are computed directly. Explicit cases use closed-form inversion; implicit cases ($P_{02}/P_{01}$, $P_{02}/P_1$) use Newton--Raphson.
 
 \begin{center}
-\begin{tikzpicture}[
-    node distance=1.6cm and 1.2cm,
-    block/.style={
-        draw=blue!70!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=blue!5,
-        align=left,
-        text width=6.5cm,
-        minimum height=1.6cm,
-        font=\small\sffamily
-    },
-    model/.style={
-        draw=green!60!black,
-        rectangle,
-        rounded corners=4pt,
-        thick,
-        fill=green!5,
-        align=left,
-        text width=4.8cm,
-        minimum height=1.3cm,
-        font=\small\sffamily
-    },
-    arrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        draw=black!70
-    },
-    dottedarrow/.style={
-        -{Stealth[scale=1.2]},
-        thick,
-        dashed,
-        draw=black!70
-    }
+\begin{tikzpicture}[x=1cm,y=1cm,
+    inp/.style={rectangle, draw=blue!70!black, thick, fill=blue!6, align=center,
+                text width=3.8cm, minimum height=0.65cm, font=\small\sffamily},
+    eng/.style={rectangle, draw=orange!80!black, thick, fill=orange!8, align=center,
+                text width=3.4cm, font=\small\sffamily},
+    outn/.style={rectangle, draw=green!60!black, thick, fill=green!6, align=center,
+                text width=2.4cm, minimum height=0.65cm, font=\small\sffamily},
+    arr/.style={-{Stealth[scale=1.0]}, thick, draw=black!70},
+    bus/.style={thick, draw=orange!70!black}
 ]
-
-% Nodes
-\node[block] (ui) {
-    \textbf{NormalShockScreen (UI Controller)} \\
-    \vspace{0.1cm}
-    \textbullet\ Captures user inputs ($M_1$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, or $\frac{\Delta V}{a_1}$) \\
-    \textbullet\ Parses math expressions \& validates bounds \\
-    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
-    \textbullet\ Controls active/computed field styles
-};
-
-\node[block, below=of ui] (engine) {
-    \textbf{NormalShockEngine (Computation Core)} \\
-    \vspace{0.1cm}
-    \textbullet\ Solves direct relations from upstream Mach $M_1$ \\
-    \textbullet\ Inverts equations of state analytically \\
-    \textbullet\ Solves implicit cases via Newton-Raphson \\
-    \textbullet\ Computes theoretical limits ($M_{2,min}$, $(\frac{\rho_2}{\rho_1})_{max}$)
-};
-
-\node[model, below left=of engine, xshift=1.2cm] (preset) {
-    \textbf{\_GasEntry (Gas Preset)} \\
-    \vspace{0.05cm}
-    \textbullet\ Preset gas names \\
-    \textbullet\ Custom or default $\gamma$
-};
-
-\node[model, below right=of engine, xshift=-1.2cm] (result) {
-    \textbf{NormalShockResult (Data Output)} \\
-    \vspace{0.05cm}
-    \textbullet\ $M_1$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, $\frac{\Delta V}{a_1}$
-};
-
-% Connections
-\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
-\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
-\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
-\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
-
+\node[inp] (i0) at (0, 0.0) {Case 1: $M_1$ (direct)};
+\node[inp] (i1) at (0, 0.9) {Case 2: $M_2$ $\to$ explicit};
+\node[inp] (i2) at (0, 1.8) {Case 3: $T_2/T_1$ $\to$ explicit};
+\node[inp] (i3) at (0, 2.7) {Case 4: $P_2/P_1$ $\to$ explicit};
+\node[inp] (i4) at (0, 3.6) {Case 5: $\rho_2/\rho_1$ $\to$ explicit};
+\node[inp] (i5) at (0, 4.5) {Case 6: $P_{02}/P_{01}$ $\to$ N--R};
+\node[inp] (i6) at (0, 5.4) {Case 7: $P_{02}/P_1$ $\to$ N--R};
+\node[inp] (i7) at (0, 6.3) {Case 8: $\Delta V/a_1$ $\to$ explicit};
+\node[eng, minimum height=6.8cm] (eng) at (7.0, 3.15)
+    {\textbf{NormalShockEngine}\\[3pt]
+    \texttt{fromM1($M_1$,\,$\gamma$)}};
+\node[outn] (o0) at (11.8, 0.0) {$M_1$};
+\node[outn] (o1) at (11.8, 0.9) {$M_2$};
+\node[outn] (o2) at (11.8, 1.8) {$T_2/T_1$};
+\node[outn] (o3) at (11.8, 2.7) {$P_2/P_1$};
+\node[outn] (o4) at (11.8, 3.6) {$\rho_2/\rho_1$};
+\node[outn] (o5) at (11.8, 4.5) {$P_{02}/P_{01}$};
+\node[outn] (o6) at (11.8, 5.4) {$P_{02}/P_1$};
+\node[outn] (o7) at (11.8, 6.3) {$\Delta V/a_1$};
+\foreach \i in {i0,i1,i2,i3,i4,i5,i6,i7} {\draw[arr] (\i.east) -- (eng.west |- \i);}
+\coordinate (bx) at ($(eng.east)+(0.5,0)$);
+\draw[bus] (eng.east) -- (bx);
+\draw[bus] (bx |- o0) -- (bx |- o7);
+\foreach \n in {o0,o1,o2,o3,o4,o5,o6,o7} {\draw[arr] (bx |- \n) -- (\n.west);}
 \end{tikzpicture}
 \end{center}
-
-\subsection{Logical Execution Flow}
-
-When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
-
-\begin{enumerate}
-    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
-    \item \textbf{Input Capturing and Verification:} The user enters a value in any of the active input boxes (e.g. pressure ratio $\frac{P_2}{P_1}$). The UI controller parses the input expression and runs validation checks to ensure it complies with physical bounds (e.g. $\frac{P_2}{P_1} > 1$).
-    \item \textbf{Inversion of Input to Upstream Mach Number:} The validated input is sent to the \textit{NormalShockEngine} along with the heat ratio $\gamma$:
-    \begin{itemize}
-        \item For explicit parameters ($M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{\Delta V}{a_1}$), the engine inverts the equations analytically to compute $M_1$ in closed form.
-        \item For implicit variables ($\frac{P_{02}}{P_{01}}$ or $\frac{P_{02}}{P_1}$), the engine executes a Newton--Raphson root solver, utilizing analytical derivative formulas to calculate $M_1$ to a tolerance of $10^{-5}$.
-    \end{itemize}
-    \item \textbf{Direct Forward Calculation:} Once the upstream Mach number $M_1$ is solved, the engine evaluates all other properties ($M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, $\frac{\Delta V}{a_1}$) directly using the standard explicit relations.
-    \item \textbf{Presentation of Results:} The computed variables are packaged into a \textit{NormalShockResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
-\end{enumerate}

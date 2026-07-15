@@ -1093,16 +1093,16 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 10),
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 24),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 6),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildGammaCard(context),
-                  SizedBox(height: Responsive.hp(context, 10)),
+                  SizedBox(height: Responsive.hp(context, 6)),
                   _buildFlowPropertiesCard(context),
                 ],
               ),
@@ -1176,9 +1176,9 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1190,12 +1190,12 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                       context: context,
                       controller: _gammaCtrl,
                       focusNode: _gammaFocus,
-                      hintText: 'Must be greater than 1 (e.g. 1.4)',
+                      hintText: 'Must be > 1 (e.g. 1.4)',
                       onChanged: _onGammaChanged,
                       hasError: !_gammaValid,
                     ),
                   ),
-                  SizedBox(width: Responsive.wp(context, 8)),
+                  SizedBox(width: Responsive.wp(context, 6)),
                   _GasDropdownButton(
                     context: context,
                     selectedName: _selectedGasName,
@@ -1210,7 +1210,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 ],
               ),
               if (_gammaError != null) ...[
-                SizedBox(height: Responsive.hp(context, 4)),
+                SizedBox(height: Responsive.hp(context, 2)),
                 _errorText(context, _gammaError!),
               ],
             ],
@@ -1241,8 +1241,8 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(
-          horizontal: Responsive.pad(context, 8),
-          vertical: Responsive.pad(context, 5),
+          horizontal: Responsive.pad(context, 6),
+          vertical: Responsive.pad(context, 3),
         ),
         decoration: BoxDecoration(
           color: _inverseRatio ? _C.headerBg : const Color(0xFFE5E7EB),
@@ -1253,14 +1253,14 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           children: [
             Icon(
               Icons.swap_horiz,
-              size: Responsive.sp(context, 14),
+              size: Responsive.sp(context, 12),
               color: _inverseRatio ? Colors.white : _C.labelMedium,
             ),
-            SizedBox(width: Responsive.wp(context, 4)),
+            SizedBox(width: Responsive.wp(context, 3)),
             Text(
               'Reciprocal',
               style: TextStyle(
-                fontSize: Responsive.sp(context, 11),
+                fontSize: Responsive.sp(context, 10),
                 fontWeight: FontWeight.w600,
                 color: _inverseRatio ? Colors.white : _C.labelMedium,
               ),
@@ -1282,9 +1282,9 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         // ── M₁ ─────────────────────────────────────────────────────────
         Padding(
           padding: EdgeInsets.fromLTRB(
-            Responsive.pad(context, 14),
-            Responsive.pad(context, 8),
-            Responsive.pad(context, 14),
+            Responsive.pad(context, 10),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 10),
             0,
           ),
           child: Column(
@@ -1295,16 +1295,16 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                   Text(
                     'Freestream Mach',
                     style: TextStyle(
-                      fontSize: Responsive.sp(context, 13),
+                      fontSize: Responsive.sp(context, 12),
                       fontWeight: FontWeight.w500,
                       color: _C.fieldLabel,
                     ),
                   ),
-                  SizedBox(width: Responsive.wp(context, 4)),
+                  SizedBox(width: Responsive.wp(context, 3)),
                   Text(
                     'M₁',
                     style: TextStyle(
-                      fontSize: Responsive.sp(context, 13),
+                      fontSize: Responsive.sp(context, 12),
                       fontWeight: FontWeight.w700,
                       fontStyle: FontStyle.italic,
                       color: _C.fieldLabel,
@@ -1312,17 +1312,17 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: Responsive.hp(context, 5)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _buildInputField(
                 context: context,
                 controller: _m1Ctrl,
                 focusNode: _m1Focus,
-                hintText: 'Must be supersonic (greater than 1)',
+                hintText: 'Must be > 1',
                 onChanged: _onM1Changed,
                 hasError: _m1Error != null,
               ),
               if (_m1Error != null) ...[
-                SizedBox(height: Responsive.hp(context, 4)),
+                SizedBox(height: Responsive.hp(context, 2)),
                 _errorText(context, _m1Error!),
               ],
             ],
@@ -1340,7 +1340,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           controller: _thetaSCtrl,
           focusNode: _thetaSFocus,
           hintText: _limitsValid
-              ? 'Between ${_fmt(_machAngleRad * 180 / pi)}° and 90°'
+              ? 'Range: ${_fmt(_machAngleRad * 180 / pi)}° to 90°'
               : 'Enter M₁ first',
           onChanged: _onThetaSChanged,
           error: _fieldErrors[_CSField.thetaS],
@@ -1357,7 +1357,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           controller: _thetaCCtrl,
           focusNode: _thetaCFocus,
           hintText: _limitsValid
-              ? 'Between 0° and ${_fmt(_maxConeRad * 180 / pi)}° (θcmax)'
+              ? 'Range: 0° to ${_fmt(_maxConeRad * 180 / pi)}°'
               : 'Enter M₁ first',
           onChanged: _onThetaCChanged,
           error: _fieldErrors[_CSField.thetaC],
@@ -1373,7 +1373,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           symbol: 'Mc',
           controller: _mcCtrl,
           focusNode: _mcFocus,
-          hintText: _m1Valid ? 'Must be lower than M₁ (${_fmt(_m1Value)})' : 'Enter M₁ first',
+          hintText: _m1Valid ? 'Lower than ${_fmt(_m1Value)}' : 'Enter M₁ first',
           onChanged: _onMcChanged,
           error: _fieldErrors[_CSField.mc],
           isLast: true,
@@ -1384,14 +1384,13 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         // ── Output section ──────────────────────────────────────────────
         Padding(
           padding: EdgeInsets.fromLTRB(
-            Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
-            Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 8),
+            Responsive.pad(context, 4),
+            Responsive.pad(context, 8),
+            Responsive.pad(context, 4),
           ),
           child: Column(
             children: [
-              // Row: θcmax (always shown)
               _outputRowFull(
                 context: context,
                 symbol: 'θcmax',
@@ -1400,8 +1399,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 unit: '°',
               ),
 
-              SizedBox(height: Responsive.hp(context, 8)),
-
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowPair(
                 context: context,
                 sym1: 'δ (turn)',
@@ -1409,7 +1407,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: 'M₂ (post-shock)',
                 val2: outVal(r?.m2),
               ),
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowPair(
                 context: context,
                 sym1: 'Cp (surface)',
@@ -1417,16 +1415,16 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: 'Δs/R',
                 val2: outVal(r?.dsR),
               ),
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowFull(
                 context: context,
                 symbol: "V' surface",
                 label: 'Velocity ratio at cone surface',
                 value: outVal(r?.vTotalPrime),
               ),
-              SizedBox(height: Responsive.hp(context, 10)),
+              SizedBox(height: Responsive.hp(context, 3)),
               const Divider(height: 0, thickness: 0.5),
-              SizedBox(height: Responsive.hp(context, 10)),
+              SizedBox(height: Responsive.hp(context, 3)),
               _outputRowPair(
                 context: context,
                 sym1: p2p1Sym,
@@ -1434,7 +1432,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: pcp1Sym,
                 val2: outVal(inv(r?.pcP1)),
               ),
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowPair(
                 context: context,
                 sym1: po2po1Sym,
@@ -1442,7 +1440,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: pocpo1Sym,
                 val2: outVal(inv(r?.po2po1)),
               ),
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowPair(
                 context: context,
                 sym1: rhoSym,
@@ -1450,7 +1448,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: rhocSym,
                 val2: outVal(inv(r?.rhocRho1)),
               ),
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 2)),
               _outputRowPair(
                 context: context,
                 sym1: t2t1Sym,
@@ -1482,10 +1480,10 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   }) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        Responsive.pad(context, 14),
-        Responsive.pad(context, 8),
-        Responsive.pad(context, 14),
-        isLast ? Responsive.pad(context, 10) : 0,
+        Responsive.pad(context, 10),
+        Responsive.pad(context, 6),
+        Responsive.pad(context, 10),
+        isLast ? Responsive.pad(context, 8) : 0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1495,16 +1493,16 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w500,
                   color: _C.fieldLabel,
                 ),
               ),
-              SizedBox(width: Responsive.wp(context, 4)),
+              SizedBox(width: Responsive.wp(context, 3)),
               Text(
                 symbol,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w700,
                   fontStyle: FontStyle.italic,
                   color: _C.fieldLabel,
@@ -1512,7 +1510,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
               ),
             ],
           ),
-          SizedBox(height: Responsive.hp(context, 5)),
+          SizedBox(height: Responsive.hp(context, 2)),
           _buildInputField(
             context: context,
             controller: controller,
@@ -1522,7 +1520,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
             hasError: error != null,
           ),
           if (error != null) ...[
-            SizedBox(height: Responsive.hp(context, 4)),
+            SizedBox(height: Responsive.hp(context, 2)),
             _errorText(context, error),
           ],
         ],
@@ -1539,12 +1537,12 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   }) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: Responsive.pad(context, 12),
-        vertical: Responsive.pad(context, 10),
+        horizontal: Responsive.pad(context, 8),
+        vertical: Responsive.pad(context, 4),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
-        borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
+        borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
         border: Border.all(color: _C.outputReadonlyBorder, width: 0.8),
       ),
       child: Row(
@@ -1553,7 +1551,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           Text(
             symbol,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 13),
+              fontSize: Responsive.sp(context, 11),
               fontWeight: FontWeight.w700,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
@@ -1562,7 +1560,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           Text(
             '$value$unit',
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 12),
               fontWeight: FontWeight.w600,
               color: _C.outputValue,
             ),
@@ -1585,7 +1583,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     return Row(
       children: [
         Expanded(child: _outputCell(context, sym1, val1)),
-        SizedBox(width: Responsive.wp(context, 8)),
+        SizedBox(width: Responsive.wp(context, 6)),
         Expanded(child: _outputCell(context, sym2, val2)),
       ],
     );
@@ -1594,12 +1592,12 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   Widget _outputCell(BuildContext context, String symbol, String value) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: Responsive.pad(context, 10),
-        vertical: Responsive.pad(context, 8),
+        horizontal: Responsive.pad(context, 6),
+        vertical: Responsive.pad(context, 3),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
-        borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
+        borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
         border: Border.all(color: _C.outputReadonlyBorder, width: 0.8),
       ),
       child: Column(
@@ -1608,17 +1606,17 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           Text(
             symbol,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 11),
+              fontSize: Responsive.sp(context, 9),
               fontWeight: FontWeight.w600,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
             ),
           ),
-          SizedBox(height: Responsive.hp(context, 2)),
+          SizedBox(height: Responsive.hp(context, 1)),
           Text(
             value,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 13),
+              fontSize: Responsive.sp(context, 12),
               fontWeight: FontWeight.w600,
               color: _C.outputValue,
             ),
@@ -1681,7 +1679,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         }
 
         return Container(
-          height: Responsive.hp(context, 46),
+          height: Responsive.hp(context, 36),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
@@ -1722,7 +1720,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
             autocorrect: false,
             enableSuggestions: false,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 13),
               fontWeight: FontWeight.w400,
               color: _C.textPrimary,
             ),
@@ -1730,12 +1728,12 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: Responsive.pad(context, 12),
-                vertical: Responsive.pad(context, 13),
+                vertical: Responsive.pad(context, 6),
               ),
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: TextStyle(
-                fontSize: Responsive.sp(context, 13),
+                fontSize: Responsive.sp(context, 12),
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
@@ -1802,7 +1800,7 @@ class _GasDropdownButton extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showGasPicker(ctx),
       child: Container(
-        height: Responsive.hp(ctx, 46),
+        height: Responsive.hp(ctx, 36),
         padding: EdgeInsets.symmetric(horizontal: Responsive.pad(ctx, 12)),
         decoration: BoxDecoration(
           color: _C.headerBg,
@@ -1947,10 +1945,10 @@ class _Card extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
             ),
             child: header,
           ),

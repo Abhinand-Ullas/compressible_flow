@@ -1083,10 +1083,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  Responsive.pad(context, 14),
-                  Responsive.pad(context, 10),
-                  Responsive.pad(context, 14),
-                  Responsive.pad(context, 24),
+                  Responsive.pad(context, 12),
+                  Responsive.pad(context, 6),
+                  Responsive.pad(context, 12),
+                  Responsive.pad(context, 12),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1094,7 +1094,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                     // _buildDescription(),  // moved to info section
                     // SizedBox(height: Responsive.hp(context, 14)),
                     _buildGammaCard(context),
-                    SizedBox(height: Responsive.hp(context, 10)),
+                    SizedBox(height: Responsive.hp(context, 6)),
                     _buildFieldsCard(context),
                     // const SizedBox(height: 12),
                     // _buildNoteCard(),  // moved to info section
@@ -1185,9 +1185,9 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1527,19 +1527,19 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     return Row(
       children: [
         Container(
-          width: Responsive.wp(context, 24),
-          height: Responsive.wp(context, 24),
+          width: Responsive.wp(context, 20),
+          height: Responsive.wp(context, 20),
           decoration: const BoxDecoration(
             color: _C.headerBg,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
+          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 11)),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
         Text(
           title,
           style: TextStyle(
-            fontSize: Responsive.sp(context, 13.5),
+            fontSize: Responsive.sp(context, 12),
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -1577,10 +1577,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       opacity: 1.0,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          Responsive.pad(context, 14),
-          Responsive.pad(context, 8),
-          Responsive.pad(context, 14),
-          isLast ? Responsive.pad(context, 10) : 0,
+          Responsive.pad(context, 12),
+          Responsive.pad(context, 4),
+          Responsive.pad(context, 12),
+          isLast ? Responsive.pad(context, 4) : 0,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1594,7 +1594,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                       Text(
                         label,
                         style: TextStyle(
-                          fontSize: Responsive.sp(context, 13),
+                          fontSize: Responsive.sp(context, 12),
                           fontWeight: FontWeight.w500,
                           color: _C.fieldLabel,
                         ),
@@ -1603,7 +1603,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                       Text(
                         symbol,
                         style: TextStyle(
-                          fontSize: Responsive.sp(context, 13),
+                          fontSize: Responsive.sp(context, 12),
                           fontWeight: FontWeight.w700,
                           fontStyle: FontStyle.italic,
                           color: _C.fieldLabel,
@@ -1615,7 +1615,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                 if (trailing != null) trailing,
               ],
             ),
-            SizedBox(height: Responsive.hp(context, 5)),
+            SizedBox(height: Responsive.hp(context, 2)),
             // Input field — style changes when computed vs active
             _buildInputField(
               context: context,
@@ -1695,7 +1695,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
 
         return Container(
           key: key,
-          height: Responsive.hp(context, 46),
+          height: Responsive.hp(context, 36),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
@@ -1738,7 +1738,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
             autocorrect: false,
             enableSuggestions: false,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 13),
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
               color: isComputed ? _C.outputValue : _C.textPrimary,
             ),
@@ -1746,12 +1746,12 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: Responsive.pad(context, 12),
-                vertical: Responsive.pad(context, 13),
+                vertical: Responsive.pad(context, 6),
               ),
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: TextStyle(
-                fontSize: Responsive.sp(context, 13),
+                fontSize: Responsive.sp(context, 12),
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
@@ -1927,7 +1927,7 @@ class _GasDropdownButton extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showGasPicker(ctx),
       child: Container(
-        height: Responsive.hp(ctx, 46),
+        height: Responsive.hp(ctx, 36),
         padding: EdgeInsets.symmetric(horizontal: Responsive.pad(ctx, 12)),
         decoration: BoxDecoration(
           color: _C.headerBg,
@@ -2344,10 +2344,10 @@ class _Card extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
             ),
             child: header,
           ),

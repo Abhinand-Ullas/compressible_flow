@@ -1,0 +1,268 @@
+\chapter{Conical Shock}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$\gamma$ & Specific heat ratio \\
+$M_1$ & Freestream Mach number \\
+$\theta_s$ & Shock wave angle \\
+$\theta_c$ & Cone half-angle (body angle) \\
+$M_c$ & Mach number at the cone surface \\
+$\delta$ & Flow deflection angle immediately behind the shock \\
+$M_2$ & Mach number immediately behind the shock \\
+$\frac{T_2}{T_1}$ & Static temperature ratio immediately behind the shock \\
+$\frac{P_2}{P_1}$ & Static pressure ratio immediately behind the shock \\
+$\frac{\rho_2}{\rho_1}$ & Density ratio immediately behind the shock \\
+$\frac{P_{02}}{P_{01}}$ & Stagnation pressure ratio across the shock \\
+$\frac{T_c}{T_1}$ & Static temperature ratio at the cone surface \\
+$\frac{P_c}{P_1}$ & Static pressure ratio at the cone surface \\
+$\frac{\rho_c}{\rho_1}$ & Density ratio at the cone surface \\
+$C_p$ & Surface pressure coefficient \\
+$\frac{\Delta s}{R}$ & Non-dimensional entropy rise across the shock \\
+$V_r'$ & Radial velocity component, normalized by $V_{max}$ \\
+$V_\theta'$ & Tangential velocity component, normalized by $V_{max}$ \\
+$V_{total}'$ & Total velocity component, normalized by $V_{max}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+In supersonic flow over a cone, the shock wave itself is a cone. When gas passes through this shock, it first turns sharply. After that, it flows along curved paths (streamlines) toward the solid cone surface, compressing gradually. Because this compression is continuous and curved, we cannot calculate the flow properties using simple equations. Instead, we must solve a differential equation called the Taylor--Maccoll equation. Whichever parameter the user inputs, the solver always calculates the shock angle $\theta_s$ first, then integrates the flow equations from that shock angle down to the cone surface where the flow runs parallel to the cone.
+
+\section{Mathematical Flow and Solver Steps}
+
+Analyzing conical flow requires solving the governing differential relations across the shock and along the conical streamlines, and finding the limits of attached flow. The solver executes in the following sequence:
+
+\subsection*{Step 0: Mandatory Setup and Input Mapping}
+
+The specific heat ratio $\gamma > 1$ and the freestream Mach number $M_1 > 1$ are mandatory variables. The user must supply one additional input: the shock angle $\theta_s$, the cone angle $\theta_c$, or the cone surface Mach number $M_c$. Whichever input is given, the solver's goal is to find or verify the shock angle $\theta_s$, which serves as the starting point for all downstream calculations.
+
+\subsection*{Step 1: Finding Attached Shock Limits}
+
+Before starting the main calculation, the solver determines the physical boundaries. Once $M_1$ is inputted, the engine sweeps shock angles $\theta_s$ from the Mach angle $\mu_1$ up to $90^\circ$ to find where the shock detaches from the cone:
+\begin{equation}
+\mu_1 = \sin^{-1}\left(\frac{1}{M_1}\right)
+\end{equation}
+By executing the central solver recursively across the range $[\mu_1,\ 90^\circ]$, the engine determines:
+\begin{enumerate}[nosep]
+    \item The maximum possible cone angle $\theta_{c,max}$ (limit for attached shock).
+    \item The minimum possible surface Mach number $M_{c,min}$.
+\end{enumerate}
+
+\subsection*{Step 2: Core Solver Dispatching Logic}
+
+Once input limits are set, the solver chooses one of two paths based on the active field:
+\begin{itemize}
+    \item \textbf{Direct Path:} If the user inputs the shock angle $\theta_s$ (Case 1), the solver validates the range and invokes the central solver directly.
+    \item \textbf{Iterative Path:} If the user inputs the cone angle $\theta_c$ (Case 2) or surface Mach number $M_c$ (Case 3), the solver uses Brent's method (root-finding) to solve for the corresponding shock angle $\theta_s$ in the search range $[\mu_1,\ 90^\circ]$. Once $\theta_s$ is found, the engine runs the central solver a final time.
+\end{itemize}
+
+\subsection*{Step 3: The Central Solver (Taylor--Maccoll ODE Integration)}
+
+Starting from a known shock angle $\theta_s$, this core solver computes all properties using a forward integration sequence:
+\begin{enumerate}
+    \item \textbf{Oblique-Shock Jump Conditions:} Applies the exact oblique-shock relations right behind the shock:
+    \begin{equation}
+    \delta = \tan^{-1}\left[\frac{2}{\tan\theta_s}\times\frac{M_1^2\sin^2\theta_s-1}{M_1^2(\gamma+\cos2\theta_s)+2}\right]
+    \end{equation}
+    \begin{equation}
+    M_2 = \frac{1}{\sin(\theta_s-\delta)}\sqrt{\frac{\frac{\gamma-1}{2}M_1^2\sin^2\theta_s+1}{\gamma M_1^2\sin^2\theta_s-\frac{\gamma-1}{2}}}
+    \end{equation}
+    \begin{equation}
+    \frac{P_2}{P_1} = \frac{2\gamma M_1^2\sin^2\theta_s-(\gamma-1)}{\gamma+1}
+    \end{equation}
+    \begin{equation}
+    \frac{\rho_2}{\rho_1} = \frac{(\gamma+1)M_1^2\sin^2\theta_s}{(\gamma-1)M_1^2\sin^2\theta_s+2}
+    \end{equation}
+    \begin{equation}
+    \frac{T_2}{T_1} = \frac{P_2/P_1}{\rho_2/\rho_1}
+    \end{equation}
+    If $M_2$ is not a valid real, non-negative value, the trial is rejected.
+
+    \item \textbf{Taylor--Maccoll Initial Conditions:} The velocity behind the shock is scaled as $V' = V/V_{max}$ and decomposed into radial and tangential components ($V_r', V_\theta'$):
+    \begin{equation}
+    V' = \left[\frac{2}{(\gamma-1)M_2^2}+1\right]^{-1/2}
+    \end{equation}
+    \begin{equation}
+    V_r'(\theta_s) = V'\cos(\theta_s-\delta), \qquad V_\theta'(\theta_s) = -V'\sin(\theta_s-\delta)
+    \end{equation}
+
+    \item \textbf{Runge-Kutta-Fehlberg 4(5) (RK45) Integration:} The differential equations are solved step-by-step from the shock to the cone surface. The RK45 method is an adaptive integration scheme. At each step, it calculates both a 4th-order and a 5th-order estimate of the velocity. The difference between these two estimates gives the numerical error. If the error is too large, the step size is automatically reduced; if the error is tiny, the step size is increased. This ensures high accuracy (with a relative tolerance of $10^{-13}$ and absolute tolerance of $10^{-15}$) while keeping the calculation fast. The integrated system is:
+    \begin{equation}
+    \frac{dV_r'}{d\theta} = V_\theta', \qquad
+    \frac{dV_\theta'}{d\theta} = \frac{V_r'V_\theta'^2 - \dfrac{\gamma-1}{2}(1-V_r'^2-V_\theta'^2)\left(2V_r'+V_\theta'\cot\theta\right)}{\dfrac{\gamma-1}{2}(1-V_r'^2-V_\theta'^2) - V_\theta'^2}
+    \end{equation}
+
+    \item \textbf{Solid Cone Surface Detection:} The integration stops when the tangential velocity component crosses zero ($V_\theta' = 0$). The crossing angle $\theta_c$ is located with Brent's method root-finder to a tolerance of $10^{-14}$. At this point:
+    \begin{equation}
+    V_c' = V_r'(\theta_c), \qquad M_c = \sqrt{\frac{2V_c'^2}{(\gamma-1)(1-V_c'^2)}}
+    \end{equation}
+
+    \item \textbf{Post-Processing and Ratios Evaluation:} Evaluates the remaining outputs:
+    \begin{equation}
+    \frac{P_{02}}{P_{01}} = \frac{P_2}{P_1}\left[\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_1^2}\right]^{\frac{\gamma}{\gamma-1}}
+    \end{equation}
+    \begin{equation}
+    \frac{T_c}{T_1} = \frac{T_2}{T_1}\times\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_c^2}
+    \end{equation}
+    \begin{equation}
+    \frac{P_c}{P_1} = \frac{P_2}{P_1}\left[\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_c^2}\right]^{\frac{\gamma}{\gamma-1}}
+    \end{equation}
+    \begin{equation}
+    \frac{\rho_c}{\rho_1} = \frac{\rho_2}{\rho_1}\left[\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_c^2}\right]^{\frac{1}{\gamma-1}}
+    \end{equation}
+    \begin{equation}
+    C_p = \frac{2}{\gamma M_1^2}\left(\frac{P_c}{P_1}-1\right)
+    \end{equation}
+    \begin{equation}
+    \frac{\Delta s}{R} = \max\left(0,\ -\ln\frac{P_{02}}{P_{01}}\right)
+    \end{equation}
+    \begin{equation}
+    V_{total}' = \sqrt{V_r'(\theta_c)^2+V_\theta'(\theta_c)^2}
+    \end{equation}
+\end{enumerate}
+
+\subsection*{Step 4: Input Cases and Boundaries}
+
+The three cases of inputs mapped to their boundary limits are:
+\begin{itemize}
+    \item \textbf{Case 1: Given Shock Angle $\theta_s$}
+    \begin{itemize}[nosep]
+        \item \textit{Boundary:} $\mu_1 < \theta_s < 90^\circ$, where the lower bound $\mu_1$ is the Mach angle.
+        \item \textit{Action:} Solved directly via Step 3.
+    \end{itemize}
+    \item \textbf{Case 2: Given Cone Angle $\theta_c$}
+    \begin{itemize}[nosep]
+        \item \textit{Boundary:} $0 < \theta_c \le \theta_{c,max}$, where $\theta_{c,max}$ is the maximum cone angle from Step 1.
+        \item \textit{Action:} Guesses $\theta_s$ iteratively using Step 5 to satisfy the target cone angle.
+    \end{itemize}
+    \item \textbf{Case 3: Given Surface Mach Number $M_c$}
+    \begin{itemize}[nosep]
+        \item \textit{Boundary:} $M_{c,min} \le M_c < M_1$, where $M_{c,min}$ is the minimum Mach number from Step 1.
+        \item \textit{Action:} Guesses $\theta_s$ iteratively using Step 5 to satisfy the target surface Mach number.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Step 5: Brent's Method Root-Finding}
+
+Brent's method is a safe, bracketed root-finding algorithm that combines bisection, secant, and inverse quadratic interpolation. In Case 2 and Case 3, the solver drives the following target objective functions to zero:
+\begin{itemize}
+    \item \textbf{Case 2 objective:} $f(\theta_s) = \theta_c(\theta_s) - \theta_{c,target} = 0$
+    \item \textbf{Case 3 objective:} $f(\theta_s) = M_c(\theta_s) - M_{c,target} = 0$
+\end{itemize}
+over the search interval $[\mu_1 + 10^{-12},\ 90^\circ]$. Brent's method evaluates the target functions (each invoking the central solver of Step 3) until the solution converges to a tolerance of $10^{-15}$.
+
+\section{Program Flow and Architecture}
+
+The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
+
+\subsection{Architecture Overview}
+
+The architecture is composed of the following key elements:
+\begin{itemize}
+    \item \textbf{ConicalShockScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on input changes.
+    \item \textbf{ConicalShockEngine (Logic Layer):} Contains the physical equations of state and numerical solvers. It handles exact oblique-shock relations, adaptive Runge--Kutta Fehlberg 4(5) step integration of the Taylor--Maccoll ODE, Brent's method root-finding for event location and target fitting, and detachment limit sweeps.
+    \item \textbf{ConicalResult (Data Model):} An immutable data object that wraps the solved parameters ($M_1, \theta_s, \theta_c, M_c, M_2, C_p, \frac{P_c}{P_1}$, etc.), transferring them back to the controller.
+    \item \textbf{\_GasEntry (Gas Preset Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
+\end{itemize}
+
+Below is the UML diagram showing the class relationships and sequence of interactions:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{ConicalShockScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($M_1$, $\theta_s$, $\theta_c$, or $M_c$) \\
+    \textbullet\ Parses math expressions \& validates bounds \\
+    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
+    \textbullet\ Controls active/computed field styles
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{ConicalShockEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Integrates Taylor--Maccoll ODE via RKF45 \\
+    \textbullet\ Solves target shock angles $\theta_s$ via Brent's method \\
+    \textbullet\ Computes detachment limits and gas constants
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (preset) {
+    \textbf{\_GasEntry (Gas Preset)} \\
+    \vspace{0.05cm}
+    \textbullet\ Preset gas names \\
+    \textbullet\ Custom or default $\gamma$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{ConicalResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $M_1, \theta_s, \theta_c, M_c, M_2, C_p, \frac{P_{02}}{P_{01}}, \frac{P_c}{P_1}, \dots$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
+
+\begin{enumerate}
+    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
+    \item \textbf{Input Capturing and Verification:} The user enters values for the primary variables ($M_1$ and another parameter). The UI controller parses the input expressions and validates that they comply with physical bounds (e.g., $M_1 > 1$, $\theta_s > \mu_1$).
+    \item \textbf{Inversion of Input to Shock Angle:} The validated input is sent to the \textit{ConicalShockEngine} along with $\gamma$ and $M_1$:
+    \begin{itemize}
+        \item For the explicit parameter ($\theta_s$), the engine calculates conditions behind the shock, integrates the Taylor--Maccoll ODE to the cone surface, and returns the results.
+        \item For target parameters ($\theta_c$ or $M_c$), the engine solves the objective function iteratively using Brent's method root-finding, running the forward ODE solver at each step to converge to the target within a tolerance of $10^{-15}$.
+    \end{itemize}
+    \item \textbf{Post-Processing and Ratios Evaluation:} Once the shock angle $\theta_s$ and surface state are resolved, the engine computes surface ratios ($\frac{T_c}{T_1}$, $\frac{P_c}{P_1}$, $\frac{\rho_c}{\rho_1}$), pressure coefficient ($C_p$), and entropy rise ($\frac{\Delta s}{R}$).
+    \item \textbf{Presentation of Results:} The computed variables are packaged into a \textit{ConicalResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
+\end{enumerate}

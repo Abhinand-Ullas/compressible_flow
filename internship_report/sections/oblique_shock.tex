@@ -1,0 +1,254 @@
+\chapter{Oblique Shock}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$\gamma$ & Specific heat ratio \\
+$M_1$ & Upstream Mach number before Shock \\
+$\theta$ & Turn angle (in $^\circ$) \\
+$\beta$ & Shock angle (in $^\circ$) \\
+$M_{1n}$ & Mach number (normal to shock) before shock \\
+$M_2$ & Downstream Mach number after Shock \\
+$M_{2n}$ & Mach number (normal to shock) after shock \\
+$\frac{T_2}{T_1}$ & Static Temperature ratio across oblique shock \\
+$\frac{P_2}{P_1}$ & Static Pressure ratio across oblique shock \\
+$\frac{\rho_2}{\rho_1}$ & Density ratio across oblique shock \\
+$\frac{P_{02}}{P_{01}}$ & Stagnation Pressure ratio across oblique shock \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+Every oblique-shock property is a function of specific heat ratio $\gamma$, upstream Mach number $M_1$, and shock angle $\beta$ (or deflection angle $\theta$) alone. An oblique shock can be analyzed as a normal shock operating on the normal component of the upstream Mach number, $M_{1n} = M_1\sin\beta$. Whichever quantity the user supplies is first inverted to recover the shock angle $\beta$ and Mach number $M_1$, after which all downstream properties are evaluated. The problem is split into three cases depending on which property is given.
+
+\section{Calculation Cases}
+
+Depending on the input parameter provided by the user, the oblique shock properties are computed using one of the three cases described below.
+
+\subsection*{Case 1: Given $\gamma$, $M_1$, and $\beta$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Upstream Mach number $M_1 > 1$
+    \item Shock angle $\mu_1 < \beta < 90^\circ$, where the Mach angle $\mu_1$ is:
+    \begin{equation}
+    \mu_1 = \sin^{-1}\left(\frac{1}{M_1}\right)
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} All downstream ratios and properties follow directly from explicit analytical relations:
+\begin{equation}
+\theta = \tan^{-1}\left[2\cot\beta\left(\frac{M_1^2\sin^2\beta - 1}{M_1^2(\gamma+\cos2\beta)+2}\right)\right]
+\end{equation}
+
+\begin{equation}
+M_{1n} = M_1\sin\beta
+\end{equation}
+
+\begin{equation}
+M_{2n} = \sqrt{\frac{1+\frac{\gamma-1}{2}M_{1n}^2}{\gamma M_{1n}^2 - \frac{\gamma-1}{2}}}
+\end{equation}
+
+\begin{equation}
+M_2 = \frac{M_{2n}}{\sin(\beta-\theta)}
+\end{equation}
+
+\begin{equation}
+\frac{T_2}{T_1} = \frac{1+\frac{\gamma-1}{2}M_{1n}^2}{1+\frac{\gamma-1}{2}M_{2n}^2}
+\end{equation}
+
+\begin{equation}
+\frac{P_2}{P_1} = 1 + \frac{2\gamma}{\gamma+1}(M_{1n}^2-1)
+\end{equation}
+
+\begin{equation}
+\frac{P_{02}}{P_{01}} = \left[\frac{(\gamma+1)M_{1n}^2}{(\gamma-1)M_{1n}^2+2}\right]^{\frac{\gamma}{\gamma-1}}\times\left[\frac{\gamma+1}{2\gamma M_{1n}^2-(\gamma-1)}\right]^{\frac{1}{\gamma-1}}
+\end{equation}
+
+\begin{equation}
+\frac{\rho_2}{\rho_1} = \left[\frac{1+\frac{\gamma-1}{2}M_{2n}^2}{1+\frac{\gamma-1}{2}M_{1n}^2}\right]^{\frac{1}{1-\gamma}}\times\frac{P_{02}}{P_{01}}
+\end{equation}
+
+
+\subsection*{Case 2: Given $\gamma$, $M_1$, and $\theta$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Upstream Mach number $M_1 > 1$
+    \item Turn angle $0 < \theta < \theta_{max}$, where $\theta_{max}$ is computed analytically using the shock angle at maximum turn $\beta_{\theta_{max}}$:
+    \begin{equation}
+    \sin^2(\beta_{\theta_{max}}) = \frac{1}{\gamma M_1^2}\left\{\frac{\gamma+1}{4}M_1^2-1+\sqrt{(\gamma+1)\left[\frac{\gamma+1}{16}M_1^4+\frac{\gamma-1}{2}M_1^2+1\right]}\right\}
+    \end{equation}
+    \begin{equation}
+    \theta_{max} = \tan^{-1}\left[2\cot(\beta_{\theta_{max}})\left(\frac{M_1^2\sin^2\beta_{\theta_{max}}-1}{M_1^2(\gamma+\cos2\beta_{\theta_{max}})+2}\right)\right]
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The shock angle $\beta$ satisfies a cubic relation in $\sin^2\beta$:
+\begin{equation}
+\sin^6\beta + p\sin^4\beta + q\sin^2\beta + r = 0
+\end{equation}
+where:
+\begin{align}
+p &= -\left(\frac{M_1^2+2}{M_1^2}+\gamma\sin^2\theta\right) \\
+q &= \frac{2M_1^2+1}{M_1^4}+\left[\left(\frac{\gamma+1}{2}\right)^2+\frac{\gamma-1}{M_1^2}\right]\sin^2\theta \\
+r &= -\frac{\cos^2\theta}{M_1^4}
+\end{align}
+
+To solve the cubic equation analytically, we define the auxiliary parameters:
+\begin{equation}
+a = \frac{3q-p^2}{3}, \qquad b = \frac{2p^3-9pq+27r}{27}, \qquad \Delta = \frac{b^2}{4}+\frac{a^3}{27}
+\end{equation}
+If $\Delta > 0$, the shock is detached. If $\Delta \le 0$, the roots for $\sin^2\beta$ are determined. For $\Delta < 0$:
+\begin{equation}
+\phi = \cos^{-1}\left(\sqrt{\frac{-27b^2}{4a^3}}\right)
+\end{equation}
+\begin{align}
+x_1 &= 2\sqrt{-\frac{a}{3}}\cos\left(\frac{\phi}{3}\right) \\
+x_2 &= 2\sqrt{-\frac{a}{3}}\cos\left(\frac{\phi}{3}+\frac{2\pi}{3}\right) \\
+x_3 &= 2\sqrt{-\frac{a}{3}}\cos\left(\frac{\phi}{3}+\frac{4\pi}{3}\right)
+\end{align}
+The roots for $\sin^2\beta$ are $s_i = x_i - p/3$ (each negated if $b > 0$). The weak and strong shock angles are resolved as:
+\begin{equation}
+\beta_{weak} = \sin^{-1}(\sqrt{\min(s_{selected})}), \qquad \beta_{strong} = \sin^{-1}(\sqrt{\max(s_{selected})})
+\end{equation}
+The user selects the solution branch via the weak/strong branch toggle:
+\begin{itemize}[nosep]
+    \item \textbf{Weak shock branch toggle:} returns the weak shock angle $\beta_{weak}$ (where $M_2 > 1$ typically).
+    \item \textbf{Strong shock branch toggle:} returns the strong shock angle $\beta_{strong}$ (where $M_2 < 1$).
+\end{itemize}
+Once $\beta$ is resolved, downstream properties are calculated using Case 1 formulas.
+
+
+\subsection*{Case 3: Given $\gamma$, $M_1$, and $M_{1n}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Upstream Mach number $M_1 > 1$
+    \item Normal component Mach number $1 < M_{1n} < M_1$
+\end{itemize}
+
+\textbf{Calculation:} The shock angle $\beta$ is solved explicitly in closed form:
+\begin{equation}
+\beta = \sin^{-1}\left(\frac{M_{1n}}{M_1}\right)
+\end{equation}
+Once $\beta$ is resolved, downstream properties are calculated using Case 1 formulas.
+
+
+\section{Program Flow and Architecture}
+
+The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
+
+\subsection{Architecture Overview}
+
+The architecture is composed of the following key elements:
+\begin{itemize}
+    \item \textbf{ObliqueShockScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on whether weak or strong branches are active.
+    \item \textbf{ObliqueShockEngine (Logic Layer):} Contains pure mathematical solvers that execute the oblique shock equations of state. It handles both direct evaluations and numerical inversions (explicit and cubic solvers).
+    \item \textbf{ObliqueShockResult (Data Model):} An immutable data object that wraps the solved parameters ($M_1, \theta, \beta, M_{1n}, \theta_{max}, M_2, M_{2n}, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}$), transferring them back to the controller.
+    \item \textbf{\_GasEntry (Gas Preset Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
+\end{itemize}
+
+Below is the UML diagram showing the class relationships and sequence of interactions:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{ObliqueShockScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($M_1$, $\theta$, $\beta$, or $M_{1n}$) \\
+    \textbullet\ Parses math expressions \& validates bounds \\
+    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
+    \textbullet\ Controls active/computed field styles and toggles
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{ObliqueShockEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Solves direct relations from upstream Mach $M_1$ and $\beta$ \\
+    \textbullet\ Inverts equations of state analytically (cubic solver) \\
+    \textbullet\ Computes theta maximum limit $\theta_{max}$ and $\beta_{\theta_{max}}$
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (preset) {
+    \textbf{\_GasEntry (Gas Preset)} \\
+    \vspace{0.05cm}
+    \textbullet\ Preset gas names \\
+    \textbullet\ Custom or default $\gamma$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{ObliqueShockResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $M_1, \theta, \beta, M_{1n}, \theta_{max}, M_2, M_{2n}, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
+
+\begin{enumerate}
+    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
+    \item \textbf{Input Capturing and Verification:} The user enters values for the primary variables ($M_1$ and another parameter). The UI controller parses the input expressions and validates that they comply with physical bounds (e.g., $M_1 > 1$, $\beta > \mu_1$).
+    \item \textbf{Inversion of Input to Shock Angle:} The validated input is sent to the \textit{ObliqueShockEngine} along with $\gamma$ and $M_1$:
+    \begin{itemize}
+        \item For explicit parameters ($\beta$, $M_{1n}$), the engine computes $\beta$ directly or analytically in closed form ($\beta = \sin^{-1}(M_{1n}/M_1)$).
+        \item For the turn angle ($\theta$), the engine solves the analytical cubic equation for $\sin^2\beta$, checks for detached shock states ($\Delta > 0$), and returns the weak or strong shock angle $\beta$ based on the selected UI branch toggle.
+    \end{itemize}
+    \item \textbf{Direct Forward Calculation:} Once $M_1$ and $\beta$ are known, the engine evaluates all other properties ($M_{1n}$, $\theta$, $M_{2n}$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$) directly using standard explicit relations.
+    \item \textbf{Presentation of Results:} The computed variables are packaged into an \textit{ObliqueShockResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
+\end{enumerate}

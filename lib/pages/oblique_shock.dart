@@ -788,16 +788,16 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 10),
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 24),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 6),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildGammaCard(context),
-                  SizedBox(height: Responsive.hp(context, 10)),
+                  SizedBox(height: Responsive.hp(context, 6)),
                   _buildFlowPropertiesCard(context),
                 ],
               ),
@@ -871,9 +871,9 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
             Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,10 +1078,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
         // ── Output section ──────────────────────────────────────────────────
         Padding(
           padding: EdgeInsets.fromLTRB(
-            Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
-            Responsive.pad(context, 14),
-            Responsive.pad(context, 10),
+            Responsive.pad(context, 12),
+            Responsive.pad(context, 5),
+            Responsive.pad(context, 12),
+            Responsive.pad(context, 5),
           ),
           child: Column(
             children: [
@@ -1094,7 +1094,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 unit: '°',
               ),
 
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 4)),
 
               // Row: M₂ | M₂ₙ
               _outputRowPair(
@@ -1105,7 +1105,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 val2: outVal(r?.m2n),
               ),
 
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 4)),
 
               // Row: T₂/T₁ | P₂/P₁
               _outputRowPairWithHandy(
@@ -1142,7 +1142,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                     : null,
               ),
 
-              SizedBox(height: Responsive.hp(context, 8)),
+              SizedBox(height: Responsive.hp(context, 4)),
 
               // Row: ρ₂/ρ₁ | P₀₂/P₀₁
               _outputRowPairWithHandy(
@@ -1198,8 +1198,8 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
   }) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: Responsive.pad(context, 12),
-        vertical: Responsive.pad(context, 10),
+        horizontal: Responsive.pad(context, 10),
+        vertical: Responsive.pad(context, 8),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
@@ -1212,7 +1212,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           Text(
             symbol,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 13),
+              fontSize: Responsive.sp(context, 12),
               fontWeight: FontWeight.w700,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
@@ -1221,7 +1221,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           Text(
             '$value$unit',
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 13),
               fontWeight: FontWeight.w600,
               color: _C.outputValue,
             ),
@@ -1269,9 +1269,9 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(
         Responsive.pad(context, 10),
-        Responsive.pad(context, 8),
-        Responsive.pad(context, onHandy != null ? 4 : 10),
-        Responsive.pad(context, 8),
+        Responsive.pad(context, 6),
+        Responsive.pad(context, onHandy != null ? 2 : 10),
+        Responsive.pad(context, 6),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
@@ -1287,17 +1287,17 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 Text(
                   symbol,
                   style: TextStyle(
-                    fontSize: Responsive.sp(context, 11),
+                    fontSize: Responsive.sp(context, 10),
                     fontWeight: FontWeight.w600,
                     fontStyle: FontStyle.italic,
                     color: _C.sectionLabel,
                   ),
                 ),
-                SizedBox(height: Responsive.hp(context, 2)),
+                SizedBox(height: Responsive.hp(context, 1)),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: Responsive.sp(context, 13),
+                    fontSize: Responsive.sp(context, 12),
                     fontWeight: FontWeight.w600,
                     color: _C.outputValue,
                   ),
@@ -1311,10 +1311,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
               onTap: onHandy,
               behavior: HitTestBehavior.opaque,
               child: Padding(
-                padding: EdgeInsets.all(Responsive.pad(context, 6)),
+                padding: EdgeInsets.all(Responsive.pad(context, 4)),
                 child: Icon(
                   Icons.compare_arrows_rounded,
-                  size: Responsive.sp(context, 16),
+                  size: Responsive.sp(context, 14),
                   color: _C.headerBg,
                 ),
               ),
@@ -1332,16 +1332,19 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     return Row(
       children: [
         Container(
-          width: Responsive.wp(context, 24),
-          height: Responsive.wp(context, 24),
-          decoration: const BoxDecoration(color: _C.headerBg, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
+          width: Responsive.wp(context, 20),
+          height: Responsive.wp(context, 20),
+          decoration: const BoxDecoration(
+            color: _C.headerBg,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 11)),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
         Text(
           title,
           style: TextStyle(
-            fontSize: Responsive.sp(context, 13.5),
+            fontSize: Responsive.sp(context, 12),
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -1371,12 +1374,12 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
         _activeField != _OSField.none && !isActive && _result != null;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        Responsive.pad(context, 14),
-        Responsive.pad(context, 8),
-        Responsive.pad(context, 14),
-        isLast ? Responsive.pad(context, 10) : 0,
-      ),
+        padding: EdgeInsets.fromLTRB(
+          Responsive.pad(context, 12),
+          Responsive.pad(context, 4),
+          Responsive.pad(context, 12),
+          isLast ? Responsive.pad(context, 4) : 0,
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1477,7 +1480,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
 
         return Container(
           key: key,
-          height: Responsive.hp(context, 46),
+          height: Responsive.hp(context, 36),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
@@ -1518,7 +1521,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
             autocorrect: false,
             enableSuggestions: false,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 13),
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
               color: isComputed ? _C.outputValue : _C.textPrimary,
             ),
@@ -1526,12 +1529,12 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: Responsive.pad(context, 12),
-                vertical: Responsive.pad(context, 13),
+                vertical: Responsive.pad(context, 6),
               ),
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: TextStyle(
-                fontSize: Responsive.sp(context, 13),
+                fontSize: Responsive.sp(context, 12),
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
@@ -1604,7 +1607,7 @@ class _GasDropdownButton extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showGasPicker(ctx),
       child: Container(
-        height: Responsive.hp(ctx, 46),
+        height: Responsive.hp(ctx, 36),
         padding: EdgeInsets.symmetric(horizontal: Responsive.pad(ctx, 12)),
         decoration: BoxDecoration(
           color: _C.headerBg,
@@ -1992,10 +1995,10 @@ class _Card extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
             ),
             child: header,
           ),

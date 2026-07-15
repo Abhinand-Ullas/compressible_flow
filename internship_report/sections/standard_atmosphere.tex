@@ -1,0 +1,304 @@
+\chapter{Standard Atmosphere (1976)}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$h$ & Geopotential altitude (m) \\
+$P$ & Static pressure (Pa) \\
+$\rho$ & Static density (kg/m$^3$) \\
+$T$ & Static temperature (K) \\
+$a$ & Speed of sound (m/s) \\
+$\mu$ & Dynamic viscosity (Pa$\cdot$s) \\
+$L$ & Layer lapse rate (K/m), zero for isothermal layers \\
+$g_0$ & Sea-level gravitational acceleration (m/s$^2$) \\
+$R$ & Specific gas constant of air (J/(kg$\cdot$K)) \\
+$\gamma$ & Specific heat ratio of air \\
+$\mu_0$ & Sutherland reference dynamic viscosity (Pa$\cdot$s) \\
+$T_{Suth}$ & Sutherland reference temperature (K) \\
+$S_{Suth}$ & Sutherland temperature constant (K) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Constants}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Value \\
+\midrule
+$g_0$ & $9.80665$ m/s$^2$ \\
+$R$ & $287.0528$ J/(kg$\cdot$K) \\
+$\gamma$ & $1.4$ \\
+$\mu_0$ & $1.716\times10^{-5}$ Pa$\cdot$s (Sutherland reference) \\
+$T_{Suth}$ & $273.15$ K \\
+$S_{Suth}$ & $110.4$ K \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+The 1976 US Standard Atmosphere models the atmosphere as seven stacked
+layers from sea level to 84{,}852 m, each with a fixed base temperature
+and a constant lapse rate (zero for isothermal layers). Within a layer,
+temperature is linear in altitude and pressure follows in closed form
+from the hydrostatic equation, so the model is exact and non-iterative:
+whichever quantity the user supplies, the containing layer is located
+first, and the layer equation is then evaluated (given altitude) or
+inverted in closed form (given pressure or density) to recover the full
+atmospheric state. Density, speed of sound, and viscosity always follow
+from the ideal-gas law, the isentropic sound-speed relation, and
+Sutherland's law respectively, once $T$ and $P$ are known.
+
+\section{Layer Table}
+
+The base of each layer is defined by its geopotential altitude, base
+temperature, and lapse rate. Base pressures are generated recursively
+layer by layer starting from $P=101325$ Pa at $h=0$, so the whole table
+has a single source of truth.
+
+\begin{center}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+$h_{base}$ (m) & $T_{base}$ (K) & $L$ (K/m) & Layer \\
+\midrule
+0 & 288.15 & $-0.0065$ & Troposphere \\
+11{,}000 & 216.65 & 0 & Tropopause \\
+20{,}000 & 216.65 & $+0.001$ & Stratosphere I \\
+32{,}000 & 228.65 & $+0.0028$ & Stratosphere II \\
+47{,}000 & 270.65 & 0 & Stratopause \\
+51{,}000 & 270.65 & $-0.0028$ & Mesosphere I \\
+71{,}000 & 214.65 & $-0.002$ & Mesosphere II \\
+84{,}852 & 186.946 & --- & Top boundary \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For a lapse-rate layer ($L\neq0$), the temperature and pressure at the top
+of the layer follow from
+
+\begin{equation}
+T_{top} = T_{base} + L(h_{top}-h_{base}), \qquad
+P_{top} = P_{base}\left(\frac{T_{top}}{T_{base}}\right)^{-\frac{g_0}{LR}}
+\end{equation}
+
+and for an isothermal layer ($L=0$),
+
+\begin{equation}
+T_{top} = T_{base}, \qquad
+P_{top} = P_{base}\exp\left(-\frac{g_0(h_{top}-h_{base})}{RT_{base}}\right)
+\end{equation}
+
+The base pressure of each layer is the top pressure of the one before it.
+Layer density, where needed for locating a layer by density, follows from
+$\rho_{top} = P_{top}/(RT_{top})$.
+
+\section{Locating the Layer}
+
+\begin{itemize}[nosep]
+    \item \textbf{By altitude:} the layer whose $[h_{base}, h_{top}]$
+    interval contains $h$.
+    \item \textbf{By pressure:} pressure decreases monotonically with
+    altitude, so the layers are scanned from the ground up and the first
+    layer whose top-of-layer pressure is at or below the given $P$ is
+    selected.
+    \item \textbf{By density:} the same monotonic scan, but comparing
+    against each layer's top-of-layer density.
+\end{itemize}
+
+\section{Calculation Cases}
+
+Depending on the input parameter provided by the user, the standard atmosphere properties are computed using one of the three cases described below.
+
+\subsection*{Case 1: Given Altitude ($h$)}
+
+Valid for $0 \le h \le 84{,}852$ m. With the containing layer identified:
+
+\begin{equation}
+T = T_{base} + L(h-h_{base}), \qquad
+P = P_{base}\left(\frac{T}{T_{base}}\right)^{-\frac{g_0}{LR}} \qquad (L\neq0)
+\end{equation}
+
+\begin{equation}
+T = T_{base}, \qquad
+P = P_{base}\exp\left(-\frac{g_0(h-h_{base})}{RT_{base}}\right) \qquad (L=0)
+\end{equation}
+
+\begin{equation}
+\rho = \frac{P}{RT}
+\end{equation}
+
+\subsection*{Case 2: Given Static Pressure ($P$)}
+
+Valid for $P_{min} < P \le P_{max}$, where $P_{max}$ is the sea-level base
+pressure and $P_{min}$ is the pressure at the top of the highest layer.
+With the containing layer identified, the Case~1 relation is inverted in
+closed form:
+
+\begin{equation}
+T = T_{base}\left(\frac{P}{P_{base}}\right)^{-\frac{LR}{g_0}}, \qquad
+h = h_{base} + \frac{T-T_{base}}{L} \qquad (L\neq0)
+\end{equation}
+
+\begin{equation}
+T = T_{base}, \qquad
+h = h_{base} - \frac{RT_{base}}{g_0}\ln\left(\frac{P}{P_{base}}\right) \qquad (L=0)
+\end{equation}
+
+\begin{equation}
+\rho = \frac{P}{RT}
+\end{equation}
+
+\subsection*{Case 3: Given Static Density ($\rho$)}
+
+Valid for $\rho_{min} < \rho \le \rho_{max}$, where $\rho_{max}$ is the
+sea-level density and $\rho_{min}$ is the density at the top of the
+highest layer. With the containing layer identified (base density
+$\rho_{base} = P_{base}/(RT_{base})$), the density-altitude relation is
+inverted in closed form:
+
+\begin{equation}
+T = T_{base}\left(\frac{\rho}{\rho_{base}}\right)^{-\frac{LR}{g_0+LR}}, \qquad
+h = h_{base} + \frac{T-T_{base}}{L} \qquad (L\neq0)
+\end{equation}
+
+\begin{equation}
+T = T_{base}, \qquad
+h = h_{base} - \frac{RT_{base}}{g_0}\ln\left(\frac{\rho}{\rho_{base}}\right) \qquad (L=0)
+\end{equation}
+
+\begin{equation}
+P = \rho RT
+\end{equation}
+
+\section{Derived Properties}
+
+Once $T$ is known by any of the three routes above, the remaining derived outputs follow directly:
+
+\subsection*{Speed of Sound ($a$)}
+The local speed of sound in air is calculated using the thermodynamic relation:
+\begin{equation}
+a = \sqrt{\gamma R T}
+\end{equation}
+
+\subsection*{Dynamic Viscosity ($\mu$)}
+The dynamic viscosity of air is modeled as a function of temperature using Sutherland's law:
+\begin{equation}
+\mu = \mu_0\left(\frac{T}{T_{Suth}}\right)^{3/2}\frac{T_{Suth}+S_{Suth}}{T+S_{Suth}}
+\end{equation}
+
+\section{Program Flow and Architecture}
+
+The software architecture is structured to enforce a clear separation of concerns between the user interface, the physical model computation, and the data representation. This ensures that the computational logic remains independent of the presentation layer.
+
+\subsection{Architecture Overview}
+
+The system consists of the following primary components:
+\begin{itemize}
+    \item \textbf{StandardAtmosphereScreen (UI Layer):} Manages the state of the input fields, performs arithmetic expression parsing, validates that the inputs lie within physical bounds, and binds the computed results back to the screen.
+    \item \textbf{AtmosphereEngine (Logic Layer):} Contains the physical constants and the atmospheric layer table. It exposes methods to locate the correct altitude layer and solve the equations of state analytically.
+    \item \textbf{AtmosphereResult (Data Model):} A simple, immutable container that stores the calculated state (altitude, pressure, density, temperature, speed of sound, and viscosity).
+    \item \textbf{\_AtmLayer (Supporting Model):} Represents a single atmospheric layer, defined by its lower boundary altitude, upper boundary altitude, base temperature, base pressure, and temperature lapse rate.
+\end{itemize}
+
+Below is the UML diagram showing the structure and sequence of data flow between these components:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{StandardAtmosphereScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($h$, $P$, or $\rho$) \\
+    \textbullet\ Parses math expressions \\
+    \textbullet\ Validates input bounds \\
+    \textbullet\ Manages focus and populates outputs
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{AtmosphereEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Builds layer table recursively on startup \\
+    \textbullet\ Performs monotonic scans to locate layers \\
+    \textbullet\ Inverts equations of state analytically \\
+    \textbullet\ Computes speed of sound and viscosity
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (layer) {
+    \textbf{\_AtmLayer (Layer Config)} \\
+    \vspace{0.05cm}
+    \textbullet\ $h_{base}, h_{top}, T_{base}, P_{base}, L$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{AtmosphereResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $h, P, \rho, T, a, \mu$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (layer);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user interacts with the toolkit, the application follows a synchronous, deterministic flow:
+
+\begin{enumerate}
+    \item \textbf{Layer Table Initialization:} At application startup, the \textit{AtmosphereEngine} initializes the layered table. Using the standard altitudes and lapse rates, it recursively builds the base pressures of all seven layers from the ground up, starting from a sea-level pressure of $101{,}325$ Pa. This maintains a single source of truth.
+    \item \textbf{Input Expression Evaluation:} When a user types into an input field (e.g. Geopotential Altitude), the UI controller parses the input string, allowing arithmetic expressions (such as addition, subtraction, division, and exponents). 
+    \item \textbf{Bound Validation:} The parsed numerical value is checked against the physical limits of the 1976 model. If the value is out of bounds or invalid, an error message is displayed, and the outputs are cleared.
+    \item \textbf{Layer Location:} Once a valid input is verified, it is passed to the engine. The engine runs a monotonic scan through the layer table:
+    \begin{itemize}
+        \item For altitude, it locates the layer whose altitude range contains the input.
+        \item For pressure/density, since they decrease monotonically with altitude, it scans from the ground up until the input value lies above the layer's upper boundary value.
+    \end{itemize}
+    \item \textbf{Analytic Calculation:} The properties are calculated using the exact closed-form relation of the located layer. If pressure or density was supplied, the lapse-rate or isothermal equations are inverted analytically to solve for temperature and altitude.
+    \item \textbf{Derived Outputs and Presentation:} Finally, the engine evaluates the speed of sound and calculates dynamic viscosity using Sutherland's law. These values are returned to the UI controller inside an \textit{AtmosphereResult} object, which automatically populates and formats the remaining fields on the screen.
+\end{enumerate}

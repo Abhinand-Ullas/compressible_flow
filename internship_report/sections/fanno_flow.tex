@@ -1,0 +1,285 @@
+\chapter{Fanno Flow}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$\gamma$ & Specific heat ratio \\
+$M$ & Mach number \\
+$\frac{T}{T^*}$ & Static to Sonic Temperature ratio \\
+$\frac{P}{P^*}$ & Static to Sonic Pressure ratio \\
+$\frac{\rho}{\rho^*}$ & Density to sonic density ratio \\
+$\frac{P_0}{P_0^*}$ & Local stagnation to Sonic stagnation Pressure ratio \\
+$\frac{f L^*}{D}$ & Friction parameter (limiting duct length to reach sonic conditions) \\
+$\frac{U}{U^*}$ & Velocity to sonic velocity ratio \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+Every Fanno-flow property is a function of specific heat ratio $\gamma$ and Mach number $M$ alone. The solver therefore treats $M$ as the pivot variable: whichever quantity the user supplies is first inverted to recover $M$, after which every remaining property is evaluated directly from $M$ and $\gamma$. The problem is split into seven cases depending on which property is given.
+
+\section{Calculation Cases}
+
+Depending on the input parameter provided by the user, the Fanno flow properties are computed using one of the seven cases described below.
+
+\subsection*{Case 1: Given $\gamma$ and $M$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Mach number $M > 0$
+\end{itemize}
+
+\textbf{Calculation:} All properties follow directly from explicit analytical relations:
+\begin{equation}
+\frac{T}{T^*} = \frac{\frac{\gamma+1}{2}}{1+\frac{\gamma-1}{2}M^2}
+\end{equation}
+
+\begin{equation}
+\frac{P}{P^*} = \frac{1}{M}\sqrt{\frac{\frac{\gamma+1}{2}}{1+\frac{\gamma-1}{2}M^2}}
+\end{equation}
+
+\begin{equation}
+\frac{\rho}{\rho^*} = \frac{1}{M}\sqrt{\frac{1+\frac{\gamma-1}{2}M^2}{\frac{\gamma+1}{2}}}
+\end{equation}
+
+\begin{equation}
+\frac{P_0}{P_0^*} = \frac{1}{M}\left(\frac{1+\frac{\gamma-1}{2}M^2}{\frac{\gamma+1}{2}}\right)^{\frac{\gamma+1}{2(\gamma-1)}}
+\end{equation}
+
+\begin{equation}
+\frac{f L^*}{D} = \frac{\gamma+1}{2\gamma}\ln\left[\frac{\frac{\gamma+1}{2}M^2}{1+\frac{\gamma-1}{2}M^2}\right] + \frac{1}{\gamma}\left(\frac{1}{M^2}-1\right)
+\end{equation}
+
+\begin{equation}
+\frac{U}{U^*} = M\sqrt{\frac{\frac{\gamma+1}{2}}{1+\frac{\gamma-1}{2}M^2}}
+\end{equation}
+
+
+\subsection*{Case 2: Given $\gamma$ and $\frac{T}{T^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Temperature ratio $0 < \frac{T}{T^*} < \left(\frac{T}{T^*}\right)_{max}$, where the maximum temperature ratio is:
+    \begin{equation}
+    \left(\frac{T}{T^*}\right)_{max} = \frac{\gamma+1}{2}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The Mach number $M$ is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{\gamma+1-2\frac{T}{T^*}}{\frac{T}{T^*}(\gamma-1)}}
+\end{equation}
+
+
+\subsection*{Case 3: Given $\gamma$ and $\frac{P}{P^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Pressure ratio $\frac{P}{P^*} > 0$
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{\sqrt{\left(\frac{P}{P^*}\right)^2+\gamma^2-1}-\frac{P}{P^*}}{\frac{P}{P^*}(\gamma-1)}}
+\end{equation}
+
+
+\subsection*{Case 4: Given $\gamma$ and $\frac{\rho}{\rho^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Density ratio $\frac{\rho}{\rho^*} > \left(\frac{\rho}{\rho^*}\right)_{min}$, where the minimum density ratio is:
+    \begin{equation}
+    \left(\frac{\rho}{\rho^*}\right)_{min} = \sqrt{\frac{\gamma-1}{\gamma+1}}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{1}{\left(\frac{\rho}{\rho^*}\right)^2\times\frac{\gamma+1}{2}-\frac{\gamma-1}{2}}}
+\end{equation}
+
+
+\subsection*{Case 5: Given $\gamma$ and $\frac{P_0}{P_0^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Stagnation pressure ratio $\frac{P_0}{P_0^*} \ge 1$
+\end{itemize}
+
+\textbf{Calculation:} No closed form exists; the Mach number $M$ is solved iteratively using the bisection method based on the selected flow branch toggle:
+\begin{equation}
+M = \frac{M_{start}+M_{end}}{2}
+\end{equation}
+\begin{equation}
+f(M) = \frac{1}{M}\left(\frac{1+\frac{\gamma-1}{2}M^2}{\frac{\gamma+1}{2}}\right)^{\frac{\gamma+1}{2(\gamma-1)}} - \frac{P_0}{P_0^*} = 0
+\end{equation}
+The bisection solver updates the search brackets until $|f(M)| < 10^{-9}$ (with a limit of 100 iterations), using the following brackets based on the active branch:
+\begin{itemize}[nosep]
+    \item \textbf{Subsonic branch toggle:} Search interval $[M_{start}, M_{end}] = [10^{-8}, 1.0]$.
+    \item \textbf{Supersonic branch toggle:} Search interval $[M_{start}, M_{end}] = [1.0, 100.0]$.
+\end{itemize}
+
+
+\subsection*{Case 6: Given $\gamma$ and $\frac{f L^*}{D}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Friction parameter $\frac{f L^*}{D} > 0$. If the supersonic branch toggle is active, the friction parameter must be less than the theoretical supersonic maximum limit:
+    \begin{equation}
+    \left(\frac{f L^*}{D}\right)_{sup,max} = \frac{\gamma+1}{2\gamma}\ln\left[\frac{\gamma+1}{\gamma-1}\right] - \frac{1}{\gamma}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} No closed form exists; the Mach number $M$ is solved iteratively using the bisection method based on the selected flow branch toggle:
+\begin{equation}
+M = \frac{M_{start}+M_{end}}{2}
+\end{equation}
+\begin{equation}
+f(M) = \frac{\gamma+1}{2\gamma}\ln\left[\frac{\frac{\gamma+1}{2}M^2}{1+\frac{\gamma-1}{2}M^2}\right] + \frac{1}{\gamma}\left(\frac{1}{M^2}-1\right) - \frac{f L^*}{D} = 0
+\end{equation}
+The bisection solver updates the search brackets until $|f(M)| < 10^{-9}$ (with a limit of 100 iterations), using the following brackets based on the active branch:
+\begin{itemize}[nosep]
+    \item \textbf{Subsonic branch toggle:} Search interval $[M_{start}, M_{end}] = [10^{-8}, 1.0]$.
+    \item \textbf{Supersonic branch toggle:} Search interval $[M_{start}, M_{end}] = [1.0, 100.0]$.
+\end{itemize}
+
+
+\subsection*{Case 7: Given $\gamma$ and $\frac{U}{U^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Velocity ratio $0 < \frac{U}{U^*} < \left(\frac{U}{U^*}\right)_{max}$, where the maximum velocity ratio is:
+    \begin{equation}
+    \left(\frac{U}{U^*}\right)_{max} = \sqrt{\frac{\gamma+1}{\gamma-1}}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \frac{2\times\frac{U}{U^*}}{\sqrt{2\gamma+2-\left(2\left(\frac{U}{U^*}\right)^2\gamma\right)+2\left(\frac{U}{U^*}\right)^2}}
+\end{equation}
+
+
+\section{Program Flow and Architecture}
+
+The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
+
+\subsection{Architecture Overview}
+
+The architecture is composed of the following key elements:
+\begin{itemize}
+    \item \textbf{FannoFlowScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on whether subsonic or supersonic branches are active.
+    \item \textbf{FannoFlowEngine (Logic Layer):} Contains pure mathematical solvers that execute the Fanno flow equations of state. It handles both direct evaluations and numerical inversions (explicit and bisection solvers).
+    \item \textbf{FannoResult (Data Model):} An immutable data object that wraps the solved parameters ($M, \frac{T}{T^*}, \frac{P}{P^*}, \frac{\rho}{\rho^*}, \frac{P_0}{P_0^*}, \frac{f L^*}{D}, \frac{U}{U^*}$), transferring them back to the controller.
+    \item \textbf{\_GasEntry (Gas Preset Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
+\end{itemize}
+
+Below is the UML diagram showing the class relationships and sequence of interactions:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{FannoFlowScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($M$, $\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{P_0}{P_0^*}$, $\frac{f L^*}{D}$, or $\frac{U}{U^*}$) \\
+    \textbullet\ Parses math expressions \& validates bounds \\
+    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
+    \textbullet\ Controls active/computed field styles and toggles
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{FannoFlowEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Solves direct relations from Mach $M$ \\
+    \textbullet\ Inverts equations of state analytically \\
+    \textbullet\ Solves implicit cases via bisection \\
+    \textbullet\ Computes theoretical limits ($\left(\frac{T}{T^*}\right)_{max}$, $\left(\frac{f L^*}{D}\right)_{sup,max}$)
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (preset) {
+    \textbf{\_GasEntry (Gas Preset)} \\
+    \vspace{0.05cm}
+    \textbullet\ Preset gas names \\
+    \textbullet\ Custom or default $\gamma$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{FannoResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $M$, $\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{P_0}{P_0^*}$, $\frac{f L^*}{D}$, $\frac{U}{U^*}$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
+
+\begin{enumerate}
+    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
+    \item \textbf{Input Capturing and Verification:} The user enters a value in any of the active input boxes (e.g. pressure ratio $\frac{P}{P^*}$). The UI controller parses the input expression and runs validation checks to ensure it complies with physical bounds.
+    \item \textbf{Inversion of Input to Mach Number:} The validated input is sent to the \textit{FannoFlowEngine} along with the heat ratio $\gamma$:
+    \begin{itemize}
+        \item For explicit parameters ($\frac{T}{T^*}$, $\frac{P}{P^*}$, $\frac{\rho}{\rho^*}$, $\frac{U}{U^*}$), the engine inverts the equations analytically to compute $M$ in closed form.
+        \item For implicit variables ($\frac{P_0}{P_0^*}$ or $\frac{f L^*}{D}$), the engine executes a bisection search solver, utilizing the subsonic/supersonic toggle to define search brackets and converging to a tolerance of $10^{-9}$.
+    \end{itemize}
+    \item \textbf{Direct Forward Calculation:} Once the Mach number $M$ is solved, the engine evaluates all other properties ($\frac{T}{T^*}, \frac{P}{P^*}, \frac{\rho}{\rho^*}, \frac{P_0}{P_0^*}, \frac{f L^*}{D}, \frac{U}{U^*}$) directly using the standard explicit relations.
+    \item \textbf{Presentation of Results:} The computed variables are packaged into a \textit{FannoResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
+\end{enumerate}

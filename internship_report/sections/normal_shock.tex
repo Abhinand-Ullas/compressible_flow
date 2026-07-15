@@ -1,0 +1,331 @@
+\chapter{Normal Shock}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$\gamma$ & Specific heat ratio \\
+$M_1$ & Mach number before Shock \\
+$M_2$ & Mach number after Shock \\
+$\frac{T_2}{T_1}$ & Static Temperature ratio across normal shock \\
+$\frac{P_2}{P_1}$ & Static Pressure ratio across normal shock \\
+$\frac{\rho_2}{\rho_1}$ & Density ratio across normal shock \\
+$\frac{P_{02}}{P_{01}}$ & Stagnation Pressure ratio across normal shock \\
+$\frac{P_{02}}{P_1}$ & Stagnation (after) to static (before) Pressure ratio \\
+$\frac{\Delta V}{a_1}$ & Change in velocity, normalized by the upstream speed of sound \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+Every normal-shock property is a function of specific heat ratio $\gamma$ and upstream Mach number $M_1$ alone. The solver therefore treats $M_1$ as the pivot variable: whichever quantity the user supplies is first inverted to recover $M_1$, after which every remaining property is evaluated directly from $M_1$ and $\gamma$. The problem is split into eight cases depending on which property is given.
+
+\section{Calculation Cases}
+
+Depending on the input parameter provided by the user, the normal shock properties are computed using one of the eight cases described below.
+
+\subsection*{Case 1: Given $\gamma$ and $M_1$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Mach number $M_1 > 1$ (for a physical normal shock to form)
+\end{itemize}
+
+\textbf{Calculation:} All downstream ratios and properties follow directly from explicit analytical relations:
+\begin{equation}
+M_2 = \sqrt{\frac{1+\frac{\gamma-1}{2}M_1^2}{\gamma M_1^2 - \frac{\gamma-1}{2}}}
+\end{equation}
+
+\begin{equation}
+\frac{T_2}{T_1} = \frac{1+\frac{\gamma-1}{2}M_1^2}{1+\frac{\gamma-1}{2}M_2^2}
+\end{equation}
+
+\begin{equation}
+\frac{P_2}{P_1} = 1 + \frac{2\gamma}{\gamma+1}(M_1^2-1)
+\end{equation}
+
+\begin{equation}
+\frac{P_{02}}{P_{01}} = \frac{P_2}{P_1}\times\left[\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_1^2}\right]^{\frac{\gamma}{\gamma-1}}
+\end{equation}
+
+Equivalently, the stagnation pressure ratio can be expressed solely in terms of $M_1$:
+\begin{equation}
+\frac{P_{02}}{P_{01}} = \left[\frac{(\gamma+1)M_1^2}{(\gamma-1)M_1^2+2}\right]^{\frac{\gamma}{\gamma-1}} \times \left[\frac{\gamma+1}{2\gamma M_1^2-(\gamma-1)}\right]^{\frac{1}{\gamma-1}}
+\end{equation}
+
+The density ratio, downstream-stagnation to upstream-static pressure ratio, and non-dimensionalized velocity change are:
+\begin{equation}
+\frac{\rho_2}{\rho_1} = \left[\frac{1+\frac{\gamma-1}{2}M_2^2}{1+\frac{\gamma-1}{2}M_1^2}\right]^{\frac{1}{1-\gamma}} \times \frac{P_{02}}{P_{01}}
+\end{equation}
+
+\begin{equation}
+\frac{P_{02}}{P_1} = \frac{P_{02}}{P_{01}} \times \left(1+\frac{\gamma-1}{2}M_1^2\right)^{\frac{\gamma}{\gamma-1}}
+\end{equation}
+
+\begin{equation}
+\frac{\Delta V}{a_1} = \frac{2}{\gamma+1}\times\left(\frac{M_1^2-1}{M_1}\right)
+\end{equation}
+
+
+\subsection*{Case 2: Given $\gamma$ and $M_2$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Downstream Mach number $M_{2,min} < M_2 < 1$, where the theoretical minimum downstream Mach number $M_{2,min}$ is:
+    \begin{equation}
+    M_{2,min} = \sqrt{\frac{\gamma-1}{2\gamma}}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The upstream Mach number $M_1$ is solved explicitly in closed form:
+\begin{equation}
+M_1 = \sqrt{\frac{1+\frac{\gamma-1}{2}M_2^2}{\gamma M_2^2 - \frac{\gamma-1}{2}}}
+\end{equation}
+
+
+\subsection*{Case 3: Given $\gamma$ and $\frac{T_2}{T_1}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Static temperature ratio $\frac{T_2}{T_1} > 1$
+\end{itemize}
+
+\textbf{Calculation:} The upstream Mach number is solved via a quadratic relation in $M_1^2$. Let:
+\begin{align*}
+aa &= 2\gamma(\gamma-1) \\
+bb &= 4\gamma - (\gamma-1)^2 - \frac{T_2}{T_1}(\gamma+1)^2 \\
+cc &= -2(\gamma-1)
+\end{align*}
+The physical root for $M_1$ is solved explicitly as:
+\begin{equation}
+M_1 = \sqrt{\frac{-bb + \sqrt{bb^2 - 4(aa)(cc)}}{2\,aa}}
+\end{equation}
+
+
+\subsection*{Case 4: Given $\gamma$ and $\frac{P_2}{P_1}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Static pressure ratio $\frac{P_2}{P_1} > 1$
+\end{itemize}
+
+\textbf{Calculation:} The upstream Mach number is solved explicitly:
+\begin{equation}
+M_1 = \sqrt{\frac{\left(\frac{P_2}{P_1}-1\right)(\gamma+1)}{2\gamma}+1}
+\end{equation}
+
+
+\subsection*{Case 5: Given $\gamma$ and $\frac{\rho_2}{\rho_1}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Density ratio $1 < \frac{\rho_2}{\rho_1} < \left(\frac{\rho_2}{\rho_1}\right)_{max}$, where the maximum possible density ratio is:
+    \begin{equation}
+    \left(\frac{\rho_2}{\rho_1}\right)_{max} = \frac{\gamma+1}{\gamma-1}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} The upstream Mach number is solved explicitly in closed form:
+\begin{equation}
+M_1 = \sqrt{\frac{2\times\frac{\rho_2}{\rho_1}}{\gamma+1-\left(\frac{\rho_2}{\rho_1}\right)(\gamma-1)}}
+\end{equation}
+
+
+\subsection*{Case 6: Given $\gamma$ and $\frac{P_{02}}{P_{01}}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Stagnation pressure ratio $0 < \frac{P_{02}}{P_{01}} < 1$
+\end{itemize}
+
+\textbf{Calculation:} No analytical closed-form inversion exists; the upstream Mach number is solved iteratively using the Newton--Raphson method. Let the auxiliary variables and their derivatives be:
+\begin{equation}
+al = \frac{(\gamma+1)M_1^2}{(\gamma-1)M_1^2+2}, \qquad be = \frac{\gamma+1}{2\gamma M_1^2-(\gamma-1)}
+\end{equation}
+\begin{equation}
+\frac{d(al)}{dM_1} = \left[\frac{2}{M_1} - \frac{2M_1(\gamma-1)}{(\gamma-1)M_1^2+2}\right], \qquad \frac{d(be)}{dM_1} = \frac{-4\gamma M_1(be)}{2\gamma M_1^2-(\gamma-1)}
+\end{equation}
+
+The residual function $f(M_1)$ and its derivative $f'(M_1)$ are defined as:
+\begin{equation}
+f(M_1) = (al)^{\frac{\gamma}{\gamma-1}}\times(be)^{\frac{1}{\gamma-1}} - \frac{P_{02}}{P_{01}} = 0
+\end{equation}
+\begin{equation}
+f'(M_1) = \frac{\gamma}{\gamma-1}(al)^{\frac{1}{\gamma-1}}\frac{d(al)}{dM_1}(be)^{\frac{1}{\gamma-1}} + \frac{(al)^{\frac{\gamma}{\gamma-1}}}{\gamma-1}(be)^{\frac{2-\gamma}{\gamma-1}}\frac{d(be)}{dM_1}
+\end{equation}
+
+Beginning with an initial guess $M_{1,0} = 2.0$, successive estimates are calculated via:
+\begin{equation}
+M_{new} = M_1 - \frac{f(M_1)}{f'(M_1)}
+\end{equation}
+The iteration continues until convergence, defined when $|M_{new} - M_1| < 10^{-5}$ (with a limit of $10{,}000$ iterations).
+
+
+\subsection*{Case 7: Given $\gamma$ and $\frac{P_{02}}{P_1}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Rayleigh pitot ratio $\frac{P_{02}}{P_1} > \left(\frac{P_{02}}{P_1}\right)_{min}$, where the minimum ratio (at $M_1=1$) is:
+    \begin{equation}
+    \left(\frac{P_{02}}{P_1}\right)_{min} = \left(\frac{\gamma+1}{2}\right)^{\frac{\gamma}{\gamma-1}}
+    \end{equation}
+\end{itemize}
+
+\textbf{Calculation:} No analytical closed-form inversion exists; the upstream Mach number is solved iteratively using the Newton--Raphson method. Let the auxiliary variables and their derivatives be:
+\begin{equation}
+al = \frac{(\gamma+1)M_1^2}{2}, \qquad be = \frac{\gamma+1}{2\gamma M_1^2-(\gamma-1)}
+\end{equation}
+\begin{equation}
+\frac{d(al)}{dM_1} = (\gamma+1)M_1, \qquad \frac{d(be)}{dM_1} = \frac{-4\gamma M_1(be)}{2\gamma M_1^2-(\gamma-1)}
+\end{equation}
+
+The residual function $f(M_1)$ and its derivative $f'(M_1)$ are defined as:
+\begin{equation}
+f(M_1) = (al)^{\frac{\gamma}{\gamma-1}}\times(be)^{\frac{1}{\gamma-1}} - \frac{P_{02}}{P_1} = 0
+\end{equation}
+\begin{equation}
+f'(M_1) = \frac{\gamma}{\gamma-1}(al)^{\frac{1}{\gamma-1}}\frac{d(al)}{dM_1}(be)^{\frac{1}{\gamma-1}} + \frac{(al)^{\frac{\gamma}{\gamma-1}}}{\gamma-1}(be)^{\frac{2-\gamma}{\gamma-1}}\frac{d(be)}{dM_1}
+\end{equation}
+
+Beginning with an initial guess $M_{1,0} = 2.0$, successive estimates are calculated via:
+\begin{equation}
+M_{new} = M_1 - \frac{f(M_1)}{f'(M_1)}
+\end{equation}
+The iteration continues until convergence, defined when $|M_{new} - M_1| < 10^{-5}$ (with a limit of $10{,}000$ iterations).
+
+
+\subsection*{Case 8: Given $\gamma$ and $\frac{\Delta V}{a_1}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Non-dimensional velocity change $\frac{\Delta V}{a_1} > 0$
+\end{itemize}
+
+\textbf{Calculation:} The upstream Mach number $M_1$ is solved explicitly:
+\begin{equation}
+M_1 = \frac{\left(\frac{\Delta V}{a_1}\times\frac{\gamma+1}{2}\right) + \sqrt{\left(\frac{\Delta V}{a_1}\times\frac{\gamma+1}{2}\right)^2+4}}{2}
+\end{equation}
+
+
+\section{Program Flow and Architecture}
+
+The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
+
+\subsection{Architecture Overview}
+
+The architecture is composed of the following key elements:
+\begin{itemize}
+    \item \textbf{NormalShockScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on input changes.
+    \item \textbf{NormalShockEngine (Logic Layer):} Contains pure mathematical solvers that execute the normal shock equations of state. It handles both direct evaluations and numerical inversions (explicit and iterative Newton--Raphson).
+    \item \textbf{NormalShockResult (Data Model):} An immutable data object that wraps the solved parameters ($M_1, M_2, \frac{T_2}{T_1}, \frac{P_2}{P_1}, \frac{\rho_2}{\rho_1}, \frac{P_{02}}{P_{01}}, \frac{P_{02}}{P_1}, \frac{\Delta V}{a_1}$), transferring them back to the controller.
+    \item \textbf{\_GasEntry (Gas Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
+\end{itemize}
+
+Below is the UML diagram showing the class relationships and sequence of interactions:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{NormalShockScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($M_1$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, or $\frac{\Delta V}{a_1}$) \\
+    \textbullet\ Parses math expressions \& validates bounds \\
+    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
+    \textbullet\ Controls active/computed field styles
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{NormalShockEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Solves direct relations from upstream Mach $M_1$ \\
+    \textbullet\ Inverts equations of state analytically \\
+    \textbullet\ Solves implicit cases via Newton-Raphson \\
+    \textbullet\ Computes theoretical limits ($M_{2,min}$, $(\frac{\rho_2}{\rho_1})_{max}$)
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (preset) {
+    \textbf{\_GasEntry (Gas Preset)} \\
+    \vspace{0.05cm}
+    \textbullet\ Preset gas names \\
+    \textbullet\ Custom or default $\gamma$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{NormalShockResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $M_1$, $M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, $\frac{\Delta V}{a_1}$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
+
+\begin{enumerate}
+    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
+    \item \textbf{Input Capturing and Verification:} The user enters a value in any of the active input boxes (e.g. pressure ratio $\frac{P_2}{P_1}$). The UI controller parses the input expression and runs validation checks to ensure it complies with physical bounds (e.g. $\frac{P_2}{P_1} > 1$).
+    \item \textbf{Inversion of Input to Upstream Mach Number:} The validated input is sent to the \textit{NormalShockEngine} along with the heat ratio $\gamma$:
+    \begin{itemize}
+        \item For explicit parameters ($M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{\Delta V}{a_1}$), the engine inverts the equations analytically to compute $M_1$ in closed form.
+        \item For implicit variables ($\frac{P_{02}}{P_{01}}$ or $\frac{P_{02}}{P_1}$), the engine executes a Newton--Raphson root solver, utilizing analytical derivative formulas to calculate $M_1$ to a tolerance of $10^{-5}$.
+    \end{itemize}
+    \item \textbf{Direct Forward Calculation:} Once the upstream Mach number $M_1$ is solved, the engine evaluates all other properties ($M_2$, $\frac{T_2}{T_1}$, $\frac{P_2}{P_1}$, $\frac{\rho_2}{\rho_1}$, $\frac{P_{02}}{P_{01}}$, $\frac{P_{02}}{P_1}$, $\frac{\Delta V}{a_1}$) directly using the standard explicit relations.
+    \item \textbf{Presentation of Results:} The computed variables are packaged into a \textit{NormalShockResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
+\end{enumerate}

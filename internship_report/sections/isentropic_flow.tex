@@ -1,0 +1,292 @@
+\chapter{Isentropic Flow}
+
+\section{Nomenclature}
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Description \\
+\midrule
+$\gamma$ & Specific heat ratio \\
+$M$ & Mach number \\
+$\frac{T}{T_0}$ & Static to Stagnation temperature ratio \\
+$\frac{P}{P_0}$ & Static to Stagnation pressure ratio \\
+$\frac{\rho}{\rho_0}$ & Static to Stagnation density ratio \\
+$\frac{A}{A^*}$ & Local area to Throat area ratio \\
+$\mu$ & Mach angle \\
+$\nu$ & Prandtl--Meyer expansion angle \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Governing Idea}
+
+Every isentropic-flow property is a function of $\gamma$ and $M$ alone. The
+solver therefore treats $M$ as the pivot variable: whichever quantity the
+user supplies is first inverted to recover $M$, after which all remaining
+properties are evaluated directly as explicit functions of $M$ and $\gamma$.
+The problem is split into seven cases depending on which property is given.
+
+\section{Calculation Cases}
+
+Depending on the input parameter provided by the user, the isentropic flow properties are computed using one of the seven cases described below.
+
+\subsection*{Case 1: Given $\gamma$ and $M$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Mach number $M \ge 0$
+\end{itemize}
+
+\textbf{Calculation:} All properties follow directly from explicit analytical relations:
+\begin{equation}
+\frac{T}{T_0} = \frac{1}{1 + \frac{\gamma-1}{2}M^2}
+\end{equation}
+
+\begin{equation}
+\frac{P}{P_0} = \left(1 + \frac{\gamma-1}{2}M^2\right)^{\frac{\gamma}{1-\gamma}}
+\end{equation}
+
+\begin{equation}
+\frac{\rho}{\rho_0} = \left(1 + \frac{\gamma-1}{2}M^2\right)^{\frac{1}{1-\gamma}}
+\end{equation}
+
+\begin{equation}
+\frac{A}{A^*} = \frac{1}{M}\left[\frac{1+\left(\frac{\gamma-1}{2}\right)M^2}{\frac{\gamma+1}{2}}\right]^{\frac{\gamma+1}{2(\gamma-1)}}
+\end{equation}
+
+For supersonic flow ($M \ge 1$), the Mach angle and Prandtl--Meyer expansion angle follow as:
+\begin{equation}
+\mu = \sin^{-1}\left(\frac{1}{M}\right)
+\end{equation}
+
+\begin{equation}
+\nu = \left(\frac{\gamma+1}{\gamma-1}\right)^{\frac{1}{2}}\tan^{-1}\left[\frac{\gamma-1}{\gamma+1}(M^2-1)\right]^{\frac{1}{2}} - \tan^{-1}(M^2-1)^{\frac{1}{2}}
+\end{equation}
+For subsonic flow ($0 \le M < 1$), the values of $\mu$ and $\nu$ are mathematically undefined and not computed.
+
+
+\subsection*{Case 2: Given $\gamma$ and $\frac{T}{T_0}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Stagnation temperature ratio $0 < \frac{T}{T_0} < 1$
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{2}{\gamma-1}\left[\left(\frac{1}{T/T_0}\right)-1\right]}
+\end{equation}
+
+
+\subsection*{Case 3: Given $\gamma$ and $\frac{P}{P_0}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Stagnation pressure ratio $0 < \frac{P}{P_0} < 1$
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{2}{\gamma-1}\left[\left(\frac{P}{P_0}\right)^{\frac{1-\gamma}{\gamma}}-1\right]}
+\end{equation}
+
+
+\subsection*{Case 4: Given $\gamma$ and $\frac{\rho}{\rho_0}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Stagnation density ratio $0 < \frac{\rho}{\rho_0} < 1$
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \sqrt{\frac{2 \times \left[\left(\frac{1}{\rho/\rho_0}\right)^{\gamma-1}-1\right]}{\gamma-1}}
+\end{equation}
+
+
+\subsection*{Case 5: Given $\gamma$ and $\frac{A}{A^*}$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Area ratio $\frac{A}{A^*} \ge 1$ (values strictly below 1 are unphysical)
+\end{itemize}
+
+\textbf{Calculation:} No analytical closed-form inversion exists; the Mach number is solved iteratively using the Newton--Raphson method. Let the residual function and its derivative with respect to Mach number be defined as:
+\begin{equation}
+f(M) = \frac{1}{M}\left[\frac{1+\left(\frac{\gamma-1}{2}\right)M^2}{\frac{\gamma+1}{2}}\right]^{\frac{\gamma+1}{2(\gamma-1)}} - \frac{A}{A^*} = 0
+\end{equation}
+\begin{equation}
+f'(M) = \frac{\left(\frac{2}{\gamma+1}\right)^{\frac{\gamma+1}{2(\gamma-1)}}\left[M^2\left(\frac{\gamma+1}{2}\right)\left(1+\frac{\gamma-1}{2}M^2\right)^{\frac{3-\gamma}{2(\gamma-1)}} - \left(1+\frac{\gamma-1}{2}M^2\right)^{\frac{\gamma+1}{2(\gamma-1)}}\right]}{M^2}
+\end{equation}
+
+Beginning with an initial guess $M_0$, successive estimates are calculated via:
+\begin{equation}
+M_{new} = M - \frac{f(M)}{f'(M)}
+\end{equation}
+The iteration continues until convergence, defined when $|M_{new} - M| < 10^{-6}$ (with a limit of $10{,}000$ iterations).
+
+Due to the non-monotonic nature of the area ratio, two physical solutions exist:
+\begin{itemize}[nosep]
+    \item \textbf{Subsonic branch:} Solved using a seed value of $M_0 = 0.00001$.
+    \item \textbf{Supersonic branch:} Solved using a seed value of $M_0 = 2.0$.
+\end{itemize}
+
+
+\subsection*{Case 6: Given $\gamma$ and $\mu$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Mach angle $0^\circ < \mu \le 90^\circ$ (where $\mu$ in radians is $\mu_{rad} = \frac{\pi}{180}\mu_{deg}$)
+\end{itemize}
+
+\textbf{Calculation:} The Mach number is solved explicitly in closed form:
+\begin{equation}
+M = \frac{1}{\sin\mu_{rad}}
+\end{equation}
+Since $\mu \le 90^\circ$, this solution is strictly supersonic ($M \ge 1$).
+
+
+\subsection*{Case 7: Given $\gamma$ and $\nu$}
+
+\textbf{Given:}
+\begin{itemize}[nosep]
+    \item Specific heat ratio $\gamma > 1$
+    \item Prandtl--Meyer expansion angle $0^\circ \le \nu < \nu_{max}$, where the maximum expansion angle $\nu_{max}$ is:
+    \begin{equation}
+    \nu_{max} = \left(\sqrt{\frac{\gamma+1}{\gamma-1}} - 1\right) \times 90^\circ
+    \end{equation}
+    Let $\nu_{rad} = \frac{\pi}{180}\nu_{deg}$ be the input in radians.
+\end{itemize}
+
+\textbf{Calculation:} No analytical closed-form inversion exists; the Mach number is solved iteratively using the Newton--Raphson method. Let the residual function and its derivative with respect to Mach number be defined as:
+\begin{equation}
+f(M) = \left(\frac{\gamma+1}{\gamma-1}\right)^{\frac{1}{2}}\tan^{-1}\left[\frac{\gamma-1}{\gamma+1}(M^2-1)\right]^{\frac{1}{2}} - \tan^{-1}(M^2-1)^{\frac{1}{2}} - \nu_{rad} = 0
+\end{equation}
+\begin{equation}
+f'(M) = \frac{M\sqrt{M^2-1}}{1+\frac{\gamma-1}{2}M^2}
+\end{equation}
+
+Beginning with an initial guess of $M_0 = 2.0$ (or $M_0 = 1.05$ for small angles $\nu_{deg} < 1.0$), successive estimates are calculated via:
+\begin{equation}
+M_{new} = M - \frac{f(M)}{f'(M)}
+\end{equation}
+The iteration continues until convergence, defined when $|M_{new} - M| < 10^{-6}$. If a step results in $M_{new} \le 1$, the solver resets the trial to a midpoint $M_{new} = \frac{M + 1.0}{2.0}$ to ensure $M > 1$ remains true.
+
+
+\section{Program Flow and Architecture}
+
+The software architecture is designed using a modular, decoupled approach that separates user interaction from thermodynamic calculations. This ensures consistency, accuracy, and reusability of the physical solver.
+
+\subsection{Architecture Overview}
+
+The architecture is composed of the following key elements:
+\begin{itemize}
+    \item \textbf{IsentropicFlowScreen (UI Controller):} Manages the states of all user input text controllers, parses mathematical expressions from the inputs, validates physical bounds, and triggers calculations. It displays error states and updates fields dynamically based on whether subsonic or supersonic branches are active.
+    \item \textbf{IsentropicEngine (Logic Layer):} Contains pure mathematical solvers that execute the thermodynamic equations of state. It handles both direct evaluations and numerical inversions (explicit and iterative Newton--Raphson).
+    \item \textbf{IsentropicResult (Data Model):} An immutable data object that wraps the solved parameters ($M, \frac{T}{T_0}, \frac{P}{P_0}, \frac{\rho}{\rho_0}, \frac{A}{A^*}, \mu, \nu$), transferring them back to the controller.
+    \item \textbf{\_GasEntry (Gas Configuration):} Configures default specific heat ratios ($\gamma$) for common gases (e.g. Air, Nitrogen, Carbon Dioxide) or accepts user-specified custom gases.
+\end{itemize}
+
+Below is the UML diagram showing the class relationships and sequence of interactions:
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.6cm and 1.2cm,
+    block/.style={
+        draw=blue!70!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=blue!5,
+        align=left,
+        text width=6.5cm,
+        minimum height=1.6cm,
+        font=\small\sffamily
+    },
+    model/.style={
+        draw=green!60!black,
+        rectangle,
+        rounded corners=4pt,
+        thick,
+        fill=green!5,
+        align=left,
+        text width=4.8cm,
+        minimum height=1.3cm,
+        font=\small\sffamily
+    },
+    arrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        draw=black!70
+    },
+    dottedarrow/.style={
+        -{Stealth[scale=1.2]},
+        thick,
+        dashed,
+        draw=black!70
+    }
+]
+
+% Nodes
+\node[block] (ui) {
+    \textbf{IsentropicFlowScreen (UI Controller)} \\
+    \vspace{0.1cm}
+    \textbullet\ Captures user inputs ($M$, $\frac{T}{T_0}$, $\frac{P}{P_0}$, $\frac{\rho}{\rho_0}$, $\frac{A}{A^*}$, $\mu$, or $\nu$) \\
+    \textbullet\ Parses math expressions \& validates bounds \\
+    \textbullet\ Manages gas preset dropdowns ($\gamma$ config) \\
+    \textbullet\ Controls active/computed field styles
+};
+
+\node[block, below=of ui] (engine) {
+    \textbf{IsentropicEngine (Computation Core)} \\
+    \vspace{0.1cm}
+    \textbullet\ Solves direct relations from Mach $M$ \\
+    \textbullet\ Inverts equations of state analytically \\
+    \textbullet\ Solves implicit cases via Newton-Raphson \\
+    \textbullet\ Computes maximum expansion limits ($\nu_{max}$)
+};
+
+\node[model, below left=of engine, xshift=1.2cm] (preset) {
+    \textbf{\_GasEntry (Gas Preset)} \\
+    \vspace{0.05cm}
+    \textbullet\ Preset gas names \\
+    \textbullet\ Custom or default $\gamma$
+};
+
+\node[model, below right=of engine, xshift=-1.2cm] (result) {
+    \textbf{IsentropicResult (Data Output)} \\
+    \vspace{0.05cm}
+    \textbullet\ $M$, $\frac{T}{T_0}$, $\frac{P}{P_0}$, $\frac{\rho}{\rho_0}$, $\frac{A}{A^*}$, $\mu$, $\nu$
+};
+
+% Connections
+\path [arrow] (ui) -- node[right, font=\scriptsize\sffamily] {1. Invokes calculation} (engine);
+\path [arrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Queries} (preset);
+\path [dottedarrow] (engine) -| node[above, pos=0.8, font=\scriptsize\sffamily] {Instantiates} (result);
+\draw [dottedarrow] (result.east) -- ++(1.2cm,0) |- node[right, pos=0.25, align=left, font=\scriptsize\sffamily] {2. Updates\\fields} (ui.east);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Logical Execution Flow}
+
+When the user enters a parameter or updates the gas type, the program executes in a synchronous flow:
+
+\begin{enumerate}
+    \item \textbf{Gas Selection and $\gamma$ Configuration:} The user selects a gas preset (which populates the predefined $\gamma$) or enters a custom value. The UI controller validates that $\gamma > 1$.
+    \item \textbf{Input Capturing and Verification:} The user enters a value in any of the active input boxes (e.g. pressure ratio $\frac{P}{P_0}$). The UI controller parses the input expression and runs validation checks to ensure it complies with physical bounds (e.g. $0 < \frac{P}{P_0} < 1$).
+    \item \textbf{Inversion of Input to Mach Number:} The validated input is sent to the \textit{IsentropicEngine} along with the heat ratio $\gamma$:
+    \begin{itemize}
+        \item For explicit ratios, the engine inverts the equation of state analytically to compute $M$ in closed form.
+        \item For implicit variables ($\frac{A}{A^*}$ or $\nu$), the engine executes a Newton--Raphson root solver, utilizing analytical derivative formulas to calculate the Mach number to a tolerance of $10^{-6}$.
+    \end{itemize}
+    \item \textbf{Direct Forward Calculation:} Once the Mach number $M$ is solved, the engine evaluates the remaining ratios ($\frac{T}{T_0}$, $\frac{P}{P_0}$, $\frac{\rho}{\rho_0}$, $\frac{A}{A^*}$) directly using the standard explicit relations. If $M \ge 1$, it also evaluates the Mach angle $\mu$ and Prandtl--Meyer angle $\nu$.
+    \item \textbf{Presentation of Results:} The computed variables are packaged into an \textit{IsentropicResult} data class and returned to the screen widget, which automatically formats the numbers and displays them in the read-only output text fields.
+\end{enumerate}

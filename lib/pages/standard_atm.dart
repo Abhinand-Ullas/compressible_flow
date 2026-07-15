@@ -118,7 +118,7 @@ class _ExprParser {
 
 // ─────────────────────────────────────────────
 //  US Standard Atmosphere 1976 — layer table
-//  (geopotential altitude, 0 → 86000 m)
+//  (geopotential altitude, 0 → 84852 m)
 // ─────────────────────────────────────────────
 class _AtmLayer {
   final double hBase; // m
@@ -161,7 +161,7 @@ class AtmosphereEngine {
   static const sSuth = 110.4; // K
 
   static const double hMin = 0.0;
-  static const double hMax = 86000.0;
+  static const double hMax = 84852.0;
 
   static final List<_AtmLayer> layers = _buildLayers();
   static final double pMin = layers.last.pBase == 0 ? 0 : _pressureAtTop(layers.last);
@@ -181,7 +181,7 @@ class AtmosphereEngine {
       [47000.0, 270.65, 0.0],
       [51000.0, 270.65, -0.0028],
       [71000.0, 214.65, -0.002],
-      [86000.0, 186.946, 0.0], // top marker only — closes final layer
+      [84852.0, 186.946, 0.0], // top marker only — closes final layer
     ];
 
     final list = <_AtmLayer>[];
@@ -409,7 +409,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
 
     if (val < AtmosphereEngine.hMin || val > AtmosphereEngine.hMax) {
       setState(() {
-        _fieldErrors[_ActiveField.altitude] = 'Must be between 0 and 86000 m';
+        _fieldErrors[_ActiveField.altitude] = 'Must be between 0 and 84852 m';
         _result = null;
       });
       _clearComputedFields(_ActiveField.altitude);
@@ -534,16 +534,16 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 10),
-                Responsive.pad(context, 14),
-                Responsive.pad(context, 24),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 6),
+                Responsive.pad(context, 12),
+                Responsive.pad(context, 12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildInputsCard(context),
-                  SizedBox(height: Responsive.hp(context, 10)),
+                  SizedBox(height: Responsive.hp(context, 6)),
                   _buildOutputsCard(context),
                 ],
               ),
@@ -608,7 +608,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
           symbol: 'h  (m)',
           controller: _altCtrl,
           focusNode: _altFocus,
-          hintText: '0 to 86000',
+          hintText: '0 to 84852',
           onChanged: _onAltitudeChanged,
           error: _fieldErrors[_ActiveField.altitude],
         ),
@@ -679,16 +679,16 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     return Row(
       children: [
         Container(
-          width: Responsive.wp(context, 24),
-          height: Responsive.wp(context, 24),
+          width: Responsive.wp(context, 20),
+          height: Responsive.wp(context, 20),
           decoration: const BoxDecoration(color: _C.headerBg, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 13)),
+          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 11)),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
         Text(
           title,
           style: TextStyle(
-            fontSize: Responsive.sp(context, 13.5),
+            fontSize: Responsive.sp(context, 12),
             fontWeight: FontWeight.w700,
             color: _C.sectionLabel,
             letterSpacing: 0.5,
@@ -731,7 +731,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w500,
                   color: _C.fieldLabel,
                 ),
@@ -740,7 +740,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               Text(
                 symbol,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w700,
                   fontStyle: FontStyle.italic,
                   color: _C.fieldLabel,
@@ -748,7 +748,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               ),
             ],
           ),
-          SizedBox(height: Responsive.hp(context, 5)),
+          SizedBox(height: Responsive.hp(context, 2)),
           _buildInputField(
             context: context,
             controller: controller,
@@ -791,7 +791,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w500,
                   color: _C.fieldLabel,
                 ),
@@ -800,7 +800,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               Text(
                 symbol,
                 style: TextStyle(
-                  fontSize: Responsive.sp(context, 13),
+                  fontSize: Responsive.sp(context, 12),
                   fontWeight: FontWeight.w700,
                   fontStyle: FontStyle.italic,
                   color: _C.fieldLabel,
@@ -808,9 +808,9 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               ),
             ],
           ),
-          SizedBox(height: Responsive.hp(context, 5)),
+          SizedBox(height: Responsive.hp(context, 2)),
           Container(
-            height: Responsive.hp(context, 46),
+            height: Responsive.hp(context, 36),
             alignment: Alignment.centerLeft,
             padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 12)),
             decoration: BoxDecoration(
@@ -880,7 +880,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
         }
 
         return Container(
-          height: Responsive.hp(context, 46),
+          height: Responsive.hp(context, 36),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
@@ -922,7 +922,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
             autocorrect: false,
             enableSuggestions: false,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 14),
+              fontSize: Responsive.sp(context, 13),
               fontWeight: isComputed ? FontWeight.w500 : FontWeight.w400,
               color: isComputed ? _C.outputValue : _C.textPrimary,
             ),
@@ -930,12 +930,12 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: Responsive.pad(context, 12),
-                vertical: Responsive.pad(context, 13),
+                vertical: Responsive.pad(context, 6),
               ),
               border: InputBorder.none,
               hintText: hintText,
               hintStyle: TextStyle(
-                fontSize: Responsive.sp(context, 13),
+                fontSize: Responsive.sp(context, 12),
                 fontWeight: FontWeight.w400,
                 color: _C.fieldHint,
               ),
@@ -975,7 +975,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
         MapEntry('Direct Method', 'When altitude is entered, temperature and pressure follow directly from the layer lapse-rate equations.'),
         MapEntry('Inverse Method', 'When pressure or density is entered, the containing atmospheric layer is located first, then the layer equation is inverted in closed form to recover altitude and temperature.'),
         MapEntry('Viscosity', 'Dynamic viscosity is computed from temperature using Sutherland\'s Law.'),
-        MapEntry('Valid Range', 'Altitude 0 – 86,000 m, covering the troposphere through the mesosphere.'),
+        MapEntry('Valid Range', 'Altitude 0 – 84,852 m, covering the troposphere through the mesosphere.'),
       ],
     );
   }
@@ -1008,10 +1008,10 @@ class _Card extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
-              Responsive.pad(ctx, 14),
-              Responsive.pad(ctx, 10),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
+              Responsive.pad(ctx, 12),
+              Responsive.pad(ctx, 6),
             ),
             child: header,
           ),

@@ -527,6 +527,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.m1] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.m1);
       return;
     }
     setState(() => _fieldErrors[_NSField.m1] = null);
@@ -567,6 +568,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.m2] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.m2);
       return;
     }
     setState(() => _fieldErrors[_NSField.m2] = null);
@@ -610,6 +612,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.t2t1] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.t2t1);
       return;
     }
     setState(() => _fieldErrors[_NSField.t2t1] = null);
@@ -652,6 +655,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.p2p1] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.p2p1);
       return;
     }
     setState(() => _fieldErrors[_NSField.p2p1] = null);
@@ -697,6 +701,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
       setState(
         () => _fieldErrors[_NSField.rho2rho1] = 'Enter a valid γ first',
       );
+      _clearComputedFields(_NSField.rho2rho1);
       return;
     }
     setState(() => _fieldErrors[_NSField.rho2rho1] = null);
@@ -739,6 +744,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.p02p01] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.p02p01);
       return;
     }
     setState(() => _fieldErrors[_NSField.p02p01] = null);
@@ -783,6 +789,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.p02p1] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.p02p1);
       return;
     }
     setState(() => _fieldErrors[_NSField.p02p1] = null);
@@ -822,6 +829,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_NSField.delvA1] = 'Enter a valid γ first');
+      _clearComputedFields(_NSField.delvA1);
       return;
     }
     setState(() => _fieldErrors[_NSField.delvA1] = null);

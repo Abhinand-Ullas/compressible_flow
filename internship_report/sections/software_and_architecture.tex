@@ -84,7 +84,7 @@ The diagram below shows the top-level user interaction flow common to all seven 
     {Output\_flow\_prop()};
 
 % Side blocks
-\node[sideblock, right=1.6cm of valid1] (clearout)
+\node[sideblock, right=2.2cm of valid1] (clearout)
     {Set Output\\to Empty};
 
 \node[sideblock, left=2.5cm of output] (edit)
@@ -114,7 +114,7 @@ The diagram below shows the top-level user interaction flow common to all seven 
 \draw[arrow] (enterinput.south) -- (valid1.north);
 \draw[arrow] (valid1.south) -- node[left,font=\scriptsize\sffamily]{Yes} (knownval.north);
 \draw[arrow] (valid1) -- node[above,font=\scriptsize\sffamily]{No} (clearout);
-\draw[dasharrow] (clearout.south) -- ++(0,-0.3) -| (enterinput.east);
+\draw[dasharrow] (clearout.north) |- (enterinput.east);
 
 \draw[arrow] (knownval.south) -- (valid2.north);
 \draw[arrow] (valid2.south) -- node[left,font=\scriptsize\sffamily]{Yes} (calc.north);

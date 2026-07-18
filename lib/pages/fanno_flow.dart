@@ -517,6 +517,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.mach] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.mach);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.mach] = null);
@@ -559,6 +560,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.tRatio] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.tRatio);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.tRatio] = null);
@@ -601,6 +603,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.pRatio] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.pRatio);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.pRatio] = null);
@@ -644,6 +647,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.rhoRatio] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.rhoRatio);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.rhoRatio] = null);
@@ -686,6 +690,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.p0Ratio] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.p0Ratio);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.p0Ratio] = null);
@@ -725,6 +730,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.fricFact] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.fricFact);
       return;
     }
     final maxFric = FannoFlowEngine.calculateFricFactSupMax(_gamma);
@@ -777,6 +783,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (!_gammaValid) {
       setState(() => _fieldErrors[_ActiveField.uRatio] = 'Enter a valid γ first');
+      _clearComputedFields(_ActiveField.uRatio);
       return;
     }
     setState(() => _fieldErrors[_ActiveField.uRatio] = null);

@@ -561,6 +561,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.mach] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.mach);
       return;
     }
 
@@ -612,6 +613,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.tRatio] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.tRatio);
       return;
     }
 
@@ -663,6 +665,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.pRatio] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.pRatio);
       return;
     }
 
@@ -714,6 +717,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.rhoRatio] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.rhoRatio);
       return;
     }
 
@@ -766,6 +770,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.aRatio] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.aRatio);
       return;
     }
 
@@ -818,6 +823,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.mu] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.mu);
       return;
     }
 
@@ -867,6 +873,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _fieldErrors[_ActiveField.nu] = 'Enter a valid γ first';
         _result = null;
       });
+      _clearComputedFields(_ActiveField.nu);
       return;
     }
 
@@ -1595,7 +1602,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                         label,
                         style: TextStyle(
                           fontSize: Responsive.sp(context, 12),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           color: _C.fieldLabel,
                         ),
                       ),

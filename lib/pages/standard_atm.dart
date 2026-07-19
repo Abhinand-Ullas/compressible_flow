@@ -32,7 +32,7 @@ class _C {
 // ─────────────────────────────────────────────
 //  Which field the user is currently typing in
 // ─────────────────────────────────────────────
-enum _ActiveField { none, altitude, pressure, density }
+enum _ActiveField { none, altitude, geometricAltitude, pressure, density }
 
 // ─────────────────────────────────────────────
 //  Simple arithmetic expression evaluator (same as Isentropic page)
@@ -64,9 +64,14 @@ class _ExprParser {
   double _parseAddSub() {
     double val = _parseMulDiv();
     while (_pos < _s.length) {
-      if (_s[_pos] == '+') { _pos++; val += _parseMulDiv(); }
-      else if (_s[_pos] == '-') { _pos++; val -= _parseMulDiv(); }
-      else break;
+      if (_s[_pos] == '+') {
+        _pos++;
+        val += _parseMulDiv();
+      } else if (_s[_pos] == '-') {
+        _pos++;
+        val -= _parseMulDiv();
+      } else
+        break;
     }
     return val;
   }
@@ -74,9 +79,14 @@ class _ExprParser {
   double _parseMulDiv() {
     double val = _parsePow();
     while (_pos < _s.length) {
-      if (_s[_pos] == '*') { _pos++; val *= _parsePow(); }
-      else if (_s[_pos] == '/') { _pos++; val /= _parsePow(); }
-      else break;
+      if (_s[_pos] == '*') {
+        _pos++;
+        val *= _parsePow();
+      } else if (_s[_pos] == '/') {
+        _pos++;
+        val /= _parsePow();
+      } else
+        break;
     }
     return val;
   }
@@ -92,8 +102,14 @@ class _ExprParser {
   }
 
   double _parseUnary() {
-    if (_pos < _s.length && _s[_pos] == '-') { _pos++; return -_parsePrimary(); }
-    if (_pos < _s.length && _s[_pos] == '+') { _pos++; return _parsePrimary(); }
+    if (_pos < _s.length && _s[_pos] == '-') {
+      _pos++;
+      return -_parsePrimary();
+    }
+    if (_pos < _s.length && _s[_pos] == '+') {
+      _pos++;
+      return _parsePrimary();
+    }
     return _parsePrimary();
   }
 
@@ -101,7 +117,8 @@ class _ExprParser {
     if (_pos < _s.length && _s[_pos] == '(') {
       _pos++;
       final val = _parseAddSub();
-      if (_pos >= _s.length || _s[_pos] != ')') throw FormatException('missing )');
+      if (_pos >= _s.length || _s[_pos] != ')')
+        throw FormatException('missing )');
       _pos++;
       return val;
     }
@@ -137,6 +154,7 @@ class _AtmLayer {
 
 class AtmosphereResult {
   final double h; // geopotential altitude, m
+  final double hG; // geometric (tapeline) altitude, m
   final double p; // Pa
   final double rho; // kg/m3
   final double t; // K
@@ -144,6 +162,7 @@ class AtmosphereResult {
   final double mu; // dynamic viscosity, Pa·s
   const AtmosphereResult({
     required this.h,
+    required this.hG,
     required this.p,
     required this.rho,
     required this.t,
@@ -163,8 +182,18 @@ class AtmosphereEngine {
   static const double hMin = 0.0;
   static const double hMax = 84852.0;
 
+  // Radius of Earth, used for geopotential ⇄ geometric altitude conversion
+  // (Ref: standard atmosphere notes, Eq. 13/14).
+  static const double r0 = 6356766.0; // m
+
+  // Geometric-altitude bounds, derived from the geopotential bounds above.
+  static final double hgMin = 0.0;
+  static final double hgMax = geometricFromGeopotential(hMax);
+
   static final List<_AtmLayer> layers = _buildLayers();
-  static final double pMin = layers.last.pBase == 0 ? 0 : _pressureAtTop(layers.last);
+  static final double pMin = layers.last.pBase == 0
+      ? 0
+      : _pressureAtTop(layers.last);
   static final double pMax = layers.first.pBase;
   static final double rhoMin = _densityAtTop(layers.last);
   static final double rhoMax = layers.first.pBase / (R * layers.first.tBase);
@@ -191,7 +220,15 @@ class AtmosphereEngine {
       final tBase = defs[i][1];
       final lapse = defs[i][2];
       final hTop = defs[i + 1][0];
-      list.add(_AtmLayer(hBase: hBase, hTop: hTop, tBase: tBase, pBase: p, lapse: lapse));
+      list.add(
+        _AtmLayer(
+          hBase: hBase,
+          hTop: hTop,
+          tBase: tBase,
+          pBase: p,
+          lapse: lapse,
+        ),
+      );
 
       final tTop = lapse != 0 ? tBase + lapse * (hTop - hBase) : tBase;
       p = lapse != 0
@@ -211,11 +248,14 @@ class AtmosphereEngine {
 
   static double _densityAtTop(_AtmLayer l) {
     final pTop = _pressureAtTop(l);
-    final tTop = l.lapse != 0 ? l.tBase + l.lapse * (l.hTop - l.hBase) : l.tBase;
+    final tTop = l.lapse != 0
+        ? l.tBase + l.lapse * (l.hTop - l.hBase)
+        : l.tBase;
     return pTop / (R * tTop);
   }
-// this function might have to be changed
-  static _AtmLayer _layerForAltitude(double h) { 
+
+  // this function might have to be changed
+  static _AtmLayer _layerForAltitude(double h) {
     for (final l in layers) {
       if (h <= l.hTop) return l;
     }
@@ -238,10 +278,31 @@ class AtmosphereEngine {
     return layers.last;
   }
 
-  static AtmosphereResult _finish({required double h, required double p, required double rho, required double t}) {
+  // ── Geopotential ⇄ Geometric altitude conversion ──────────────────────────
+  // h  = geopotential altitude, hG = geometric (tapeline) altitude
+  // h  = r0·hG / (r0 + hG)      (Eq. 6)
+  // hG = r0·h  / (r0 - h)       (Eq. 13/14)
+  static double geopotentialFromGeometric(double hG) => r0 * hG / (r0 + hG);
+  static double geometricFromGeopotential(double h) => r0 * h / (r0 - h);
+
+  static AtmosphereResult _finish({
+    required double h,
+    required double p,
+    required double rho,
+    required double t,
+  }) {
     final a = sqrt(gamma * R * t);
-    final mu = mu0 * pow(t / tSuth, 1.5).toDouble() * (tSuth + sSuth) / (t + sSuth);
-    return AtmosphereResult(h: h, p: p, rho: rho, t: t, a: a, mu: mu);
+    final mu =
+        mu0 * pow(t / tSuth, 1.5).toDouble() * (tSuth + sSuth) / (t + sSuth);
+    return AtmosphereResult(
+      h: h,
+      hG: geometricFromGeopotential(h),
+      p: p,
+      rho: rho,
+      t: t,
+      a: a,
+      mu: mu,
+    );
   }
 
   /// Direct method — geopotential altitude is a native input to the 1976 model.
@@ -256,6 +317,13 @@ class AtmosphereEngine {
       p = l.pBase * exp(-g0 * (h - l.hBase) / (R * l.tBase));
     }
     return _finish(h: h, p: p, rho: p / (R * t), t: t);
+  }
+
+  /// Direct method — geometric (tapeline) altitude is first converted to
+  /// geopotential altitude (Eq. 6), then handled exactly as [fromAltitude].
+  static AtmosphereResult fromGeometricAltitude(double hG) {
+    final h = geopotentialFromGeometric(hG);
+    return fromAltitude(h);
   }
 
   /// Inverse method — locate the layer by pressure, then invert the
@@ -301,15 +369,18 @@ class StandardAtmosphereScreen extends StatefulWidget {
   const StandardAtmosphereScreen({super.key, this.onDrawer});
 
   @override
-  State<StandardAtmosphereScreen> createState() => _StandardAtmosphereScreenState();
+  State<StandardAtmosphereScreen> createState() =>
+      _StandardAtmosphereScreenState();
 }
 
 class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
   final _altCtrl = TextEditingController();
+  final _hgCtrl = TextEditingController();
   final _pCtrl = TextEditingController();
   final _rhoCtrl = TextEditingController();
 
   final _altFocus = FocusNode();
+  final _hgFocus = FocusNode();
   final _pFocus = FocusNode();
   final _rhoFocus = FocusNode();
 
@@ -336,16 +407,17 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     }
 
     onFocusChange(_ActiveField.altitude, _altFocus);
+    onFocusChange(_ActiveField.geometricAltitude, _hgFocus);
     onFocusChange(_ActiveField.pressure, _pFocus);
     onFocusChange(_ActiveField.density, _rhoFocus);
   }
 
   @override
   void dispose() {
-    for (final c in [_altCtrl, _pCtrl, _rhoCtrl, _tCtrl, _aCtrl, _muCtrl]) {
+    for (final c in [_altCtrl, _hgCtrl, _pCtrl, _rhoCtrl, _tCtrl, _aCtrl, _muCtrl]) {
       c.dispose();
     }
-    for (final f in [_altFocus, _pFocus, _rhoFocus]) {
+    for (final f in [_altFocus, _hgFocus, _pFocus, _rhoFocus]) {
       f.dispose();
     }
     super.dispose();
@@ -363,6 +435,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
   void _clearComputedFields(_ActiveField except) {
     _updating = true;
     if (except != _ActiveField.altitude) _altCtrl.clear();
+    if (except != _ActiveField.geometricAltitude) _hgCtrl.clear();
     if (except != _ActiveField.pressure) _pCtrl.clear();
     if (except != _ActiveField.density) _rhoCtrl.clear();
     _tCtrl.clear();
@@ -374,6 +447,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
   void _writeComputedFields(_ActiveField source, AtmosphereResult r) {
     _updating = true;
     if (source != _ActiveField.altitude) _altCtrl.text = _fmt(r.h);
+    if (source != _ActiveField.geometricAltitude) _hgCtrl.text = _fmt(r.hG);
     if (source != _ActiveField.pressure) _pCtrl.text = _fmt(r.p);
     if (source != _ActiveField.density) _rhoCtrl.text = _fmt(r.rho);
     _tCtrl.text = _fmt(r.t);
@@ -422,6 +496,47 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     _writeComputedFields(_ActiveField.altitude, r);
   }
 
+  void _onGeometricAltitudeChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.geometricAltitude;
+    _clearOtherErrors(_ActiveField.geometricAltitude);
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _fieldErrors[_ActiveField.geometricAltitude] = null;
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.geometricAltitude);
+      return;
+    }
+
+    final val = _evalExpr(trimmed);
+    if (val == null) {
+      setState(() {
+        _fieldErrors[_ActiveField.geometricAltitude] = 'Invalid expression';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.geometricAltitude);
+      return;
+    }
+
+    if (val < AtmosphereEngine.hgMin || val > AtmosphereEngine.hgMax) {
+      setState(() {
+        _fieldErrors[_ActiveField.geometricAltitude] =
+            'Must be between 0 and ${_fmt(AtmosphereEngine.hgMax)} m';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.geometricAltitude);
+      return;
+    }
+
+    setState(() => _fieldErrors[_ActiveField.geometricAltitude] = null);
+    final r = AtmosphereEngine.fromGeometricAltitude(val);
+    setState(() => _result = r);
+    _writeComputedFields(_ActiveField.geometricAltitude, r);
+  }
+
   void _onPressureChanged(String raw) {
     if (_updating) return;
     _activeField = _ActiveField.pressure;
@@ -449,7 +564,8 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
 
     if (val <= AtmosphereEngine.pMin || val > AtmosphereEngine.pMax) {
       setState(() {
-        _fieldErrors[_ActiveField.pressure] = 'Must be between ${_fmt(AtmosphereEngine.pMin)} and ${_fmt(AtmosphereEngine.pMax)} Pa';
+        _fieldErrors[_ActiveField.pressure] =
+            'Must be between ${_fmt(AtmosphereEngine.pMin)} and ${_fmt(AtmosphereEngine.pMax)} Pa';
         _result = null;
       });
       _clearComputedFields(_ActiveField.pressure);
@@ -489,7 +605,8 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
 
     if (val <= AtmosphereEngine.rhoMin || val > AtmosphereEngine.rhoMax) {
       setState(() {
-        _fieldErrors[_ActiveField.density] = 'Must be between ${_fmt(AtmosphereEngine.rhoMin)} and ${_fmt(AtmosphereEngine.rhoMax)} kg/m³';
+        _fieldErrors[_ActiveField.density] =
+            'Must be between ${_fmt(AtmosphereEngine.rhoMin)} and ${_fmt(AtmosphereEngine.rhoMax)} kg/m³';
         _result = null;
       });
       _clearComputedFields(_ActiveField.density);
@@ -569,7 +686,11 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
           child: Row(
             children: [
               IconButton(
-                icon: Icon(Icons.menu, color: Colors.white, size: Responsive.sp(context, 22)),
+                icon: Icon(
+                  Icons.menu,
+                  color: Colors.white,
+                  size: Responsive.sp(context, 22),
+                ),
                 onPressed: widget.onDrawer ?? () {},
               ),
               Expanded(
@@ -585,7 +706,19 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.info_outline, color: Colors.white, size: Responsive.sp(context, 22)),
+                icon: Icon(
+                  Icons.tips_and_updates_outlined,
+                  color: Colors.yellow,
+                  size: Responsive.sp(context, 22),
+                ),
+                onPressed: () => _showFeaturesDialog(context),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.info_outline,
+                  color: Colors.white,
+                  size: Responsive.sp(context, 22),
+                ),
                 onPressed: () => _showInfoDialog(context),
               ),
             ],
@@ -611,6 +744,19 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
           hintText: '0 to 84852',
           onChanged: _onAltitudeChanged,
           error: _fieldErrors[_ActiveField.altitude],
+        ),
+        _divider(),
+        _atmField(
+          context: context,
+          field: _ActiveField.geometricAltitude,
+          label: 'Geometric Altitude',
+          symbol: 'hg  (m)',
+          symbolWidget: _hgSymbol(context),
+          controller: _hgCtrl,
+          focusNode: _hgFocus,
+          hintText: '0 to ${_fmt(AtmosphereEngine.hgMax)}',
+          onChanged: _onGeometricAltitudeChanged,
+          error: _fieldErrors[_ActiveField.geometricAltitude],
         ),
         _divider(),
         _atmField(
@@ -645,7 +791,11 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
   Widget _buildOutputsCard(BuildContext context) {
     return _Card(
       context: context,
-      header: _cardHeader(context, Icons.calculate_outlined, 'DERIVED PROPERTIES'),
+      header: _cardHeader(
+        context,
+        Icons.calculate_outlined,
+        'DERIVED PROPERTIES',
+      ),
       children: [
         _outputField(
           context: context,
@@ -681,8 +831,15 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
         Container(
           width: Responsive.wp(context, 20),
           height: Responsive.wp(context, 20),
-          decoration: const BoxDecoration(color: _C.headerBg, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.white, size: Responsive.sp(context, 11)),
+          decoration: const BoxDecoration(
+            color: _C.headerBg,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: Responsive.sp(context, 11),
+          ),
         ),
         SizedBox(width: Responsive.wp(context, 8)),
         Text(
@@ -698,7 +855,40 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     );
   }
 
-  Widget _divider() => const Divider(height: 0, thickness: 0.5, color: _C.rowDivider);
+  Widget _divider() =>
+      const Divider(height: 0, thickness: 0.5, color: _C.rowDivider);
+
+  /// Renders "h_g  (m)" with a true subscript g (no Unicode subscript-g
+  /// glyph exists, so it's built manually via a lowered, smaller TextSpan).
+  Widget _hgSymbol(BuildContext context) {
+    final baseStyle = TextStyle(
+      fontSize: Responsive.sp(context, 12),
+      fontWeight: FontWeight.w700,
+      fontStyle: FontStyle.italic,
+      color: _C.fieldLabel,
+    );
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          const TextSpan(text: 'h'),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Transform.translate(
+              offset: Offset(0, Responsive.pad(context, 3)),
+              child: Text(
+                'g',
+                style: baseStyle.copyWith(
+                  fontSize: Responsive.sp(context, 9),
+                ),
+              ),
+            ),
+          ),
+          const TextSpan(text: '  (m)'),
+        ],
+      ),
+    );
+  }
 
   /// A single editable atmospheric-state field row.
   Widget _atmField({
@@ -712,9 +902,11 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
     required ValueChanged<String> onChanged,
     String? error,
     bool isLast = false,
+    Widget? symbolWidget, // overrides the plain-text `symbol` when set
   }) {
     final isActive = _activeField == field;
-    final isComputed = _activeField != _ActiveField.none && !isActive && _result != null;
+    final isComputed =
+        _activeField != _ActiveField.none && !isActive && _result != null;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -732,20 +924,21 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
                 label,
                 style: TextStyle(
                   fontSize: Responsive.sp(context, 12),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: _C.fieldLabel,
                 ),
               ),
               SizedBox(width: Responsive.wp(context, 4)),
-              Text(
-                symbol,
-                style: TextStyle(
-                  fontSize: Responsive.sp(context, 12),
-                  fontWeight: FontWeight.w700,
-                  fontStyle: FontStyle.italic,
-                  color: _C.fieldLabel,
-                ),
-              ),
+              symbolWidget ??
+                  Text(
+                    symbol,
+                    style: TextStyle(
+                      fontSize: Responsive.sp(context, 12),
+                      fontWeight: FontWeight.w700,
+                      fontStyle: FontStyle.italic,
+                      color: _C.fieldLabel,
+                    ),
+                  ),
             ],
           ),
           SizedBox(height: Responsive.hp(context, 2)),
@@ -792,7 +985,7 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
                 label,
                 style: TextStyle(
                   fontSize: Responsive.sp(context, 12),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: _C.fieldLabel,
                 ),
               ),
@@ -812,26 +1005,37 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
           Container(
             height: Responsive.hp(context, 36),
             alignment: Alignment.centerLeft,
-            padding: EdgeInsets.symmetric(horizontal: Responsive.pad(context, 12)),
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.pad(context, 12),
+            ),
             decoration: BoxDecoration(
               color: _C.computedBg,
               borderRadius: BorderRadius.circular(Responsive.wp(context, 8)),
-              border: Border.all(color: _C.fieldBorder.withValues(alpha: 0.6), width: 1),
+              border: Border.all(
+                color: _C.fieldBorder.withValues(alpha: 0.6),
+                width: 1,
+              ),
             ),
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: SelectableText(
                     controller.text.isEmpty ? '—' : controller.text,
                     style: TextStyle(
                       fontSize: Responsive.sp(context, 14),
                       fontWeight: FontWeight.w500,
-                      color: controller.text.isEmpty ? _C.labelSmall : _C.outputValue,
+                      color: controller.text.isEmpty
+                          ? _C.labelSmall
+                          : _C.outputValue,
                     ),
                   ),
                 ),
                 if (controller.text.isNotEmpty)
-                  Icon(Icons.lock_outline, size: Responsive.sp(context, 14), color: _C.labelSmall),
+                  Icon(
+                    Icons.lock_outline,
+                    size: Responsive.sp(context, 14),
+                    color: _C.labelSmall,
+                  ),
               ],
             ),
           ),
@@ -875,7 +1079,11 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
         if (isComputed) {
           suffix = Padding(
             padding: EdgeInsets.only(right: Responsive.pad(context, 10)),
-            child: Icon(Icons.lock_outline, size: Responsive.sp(context, 14), color: _C.labelSmall),
+            child: Icon(
+              Icons.lock_outline,
+              size: Responsive.sp(context, 14),
+              color: _C.labelSmall,
+            ),
           );
         }
 
@@ -894,7 +1102,9 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),
               TextInputFormatter.withFunction((oldValue, newValue) {
-                final text = newValue.text.replaceAll('×', '*').replaceAll('÷', '/');
+                final text = newValue.text
+                    .replaceAll('×', '*')
+                    .replaceAll('÷', '/');
                 return newValue.copyWith(text: text);
               }),
               TextInputFormatter.withFunction((oldValue, newValue) {
@@ -903,7 +1113,9 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
                 int insertedLen;
                 if (replacedStart >= 0 && replacedEnd >= 0) {
                   final replacedLen = replacedEnd - replacedStart;
-                  insertedLen = newValue.text.length - (oldValue.text.length - replacedLen);
+                  insertedLen =
+                      newValue.text.length -
+                      (oldValue.text.length - replacedLen);
                 } else {
                   insertedLen = newValue.text.length - oldValue.text.length;
                 }
@@ -954,12 +1166,19 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
   Widget _errorText(BuildContext context, String msg) {
     return Row(
       children: [
-        Icon(Icons.error_outline, size: Responsive.sp(context, 13), color: _C.errorText),
+        Icon(
+          Icons.error_outline,
+          size: Responsive.sp(context, 13),
+          color: _C.errorText,
+        ),
         SizedBox(width: Responsive.wp(context, 4)),
         Expanded(
           child: Text(
             msg,
-            style: TextStyle(fontSize: Responsive.sp(context, 11), color: _C.errorText),
+            style: TextStyle(
+              fontSize: Responsive.sp(context, 11),
+              color: _C.errorText,
+            ),
           ),
         ),
       ],
@@ -971,13 +1190,32 @@ class _StandardAtmosphereScreenState extends State<StandardAtmosphereScreen> {
       context,
       title: 'About Standard Atmosphere',
       items: const [
-        MapEntry('Geopotential Altitude', 'All altitude values are geopotential, per the 1976 US Standard Atmosphere model.'),
-        MapEntry('Direct Method', 'When altitude is entered, temperature and pressure follow directly from the layer lapse-rate equations.'),
-        MapEntry('Inverse Method', 'When pressure or density is entered, the containing atmospheric layer is located first, then the layer equation is inverted in closed form to recover altitude and temperature.'),
-        MapEntry('Viscosity', 'Dynamic viscosity is computed from temperature using Sutherland\'s Law.'),
-        MapEntry('Valid Range', 'Altitude 0 – 84,852 m, covering the troposphere through the mesosphere.'),
+        MapEntry(
+          'Geopotential Altitude',
+          'All altitude values are geopotential, per the 1976 US Standard Atmosphere model.',
+        ),
+        MapEntry(
+          'Direct Method',
+          'When altitude is entered, temperature and pressure follow directly from the layer lapse-rate equations.',
+        ),
+        MapEntry(
+          'Inverse Method',
+          'When pressure or density is entered, the containing atmospheric layer is located first, then the layer equation is inverted in closed form to recover altitude and temperature.',
+        ),
+        MapEntry(
+          'Viscosity',
+          'Dynamic viscosity is computed from temperature using Sutherland\'s Law.',
+        ),
+        MapEntry(
+          'Valid Range',
+          'Altitude 0 – 84,852 m, covering the troposphere through the mesosphere.',
+        ),
       ],
     );
+  }
+
+  void _showFeaturesDialog(BuildContext context) {
+    showAppFeaturesDialog(context);
   }
 }
 

@@ -478,8 +478,10 @@ class ConicalShockEngine {
   }
 
   /// Mirrors analyze_detachment_limits(): mach angle, max attachable theta_s,
-  /// and the maximum attached cone half-angle.
-  static ({double machAngle, double lowerBound, double upperBound, double maxConeRad})
+  /// the maximum attached cone half-angle, and beta* (the weak/strong divider
+  /// — the theta_s at which theta_c is maximized, tracked directly during the
+  /// same sweep/refine used to find the detachment limit).
+  static ({double machAngle, double lowerBound, double upperBound, double maxConeRad, double betaStarRad, double minConeMc})
       analyzeDetachmentLimits(double m1, double gamma) {
     final machAngle = asin(1 / m1);
     final lowerBound = machAngle + 1e-12;
@@ -490,6 +492,8 @@ class ConicalShockEngine {
     final step = (end - start) / (n - 1);
 
     double maxTc = 0.0;
+    double betaStarRad = start;
+    double minMc = double.infinity;
     double lastValidTs = start;
     double firstInvalidTs = end;
 
@@ -498,7 +502,11 @@ class ConicalShockEngine {
       final m = findConeFromShock(ts, m1, gamma);
       if (m != null && !m.thetaC.isNaN) {
         lastValidTs = ts;
-        if (m.thetaC > maxTc) maxTc = m.thetaC;
+        if (m.thetaC > maxTc) {
+          maxTc = m.thetaC;
+          betaStarRad = ts;
+        }
+        if (m.mc < minMc) minMc = m.mc;
       } else {
         firstInvalidTs = ts;
         break;
@@ -511,14 +519,26 @@ class ConicalShockEngine {
       final m = findConeFromShock(mid, m1, gamma);
       if (m != null && !m.thetaC.isNaN) {
         left = mid;
-        if (m.thetaC > maxTc) maxTc = m.thetaC;
+        if (m.thetaC > maxTc) {
+          maxTc = m.thetaC;
+          betaStarRad = mid;
+        }
+        if (m.mc < minMc) minMc = m.mc;
       } else {
         right = mid;
       }
     }
 
     final upperBound = left - 1e-6;
-    return (machAngle: machAngle, lowerBound: lowerBound, upperBound: upperBound, maxConeRad: maxTc);
+
+    return (
+      machAngle: machAngle,
+      lowerBound: lowerBound,
+      upperBound: upperBound,
+      maxConeRad: maxTc,
+      betaStarRad: betaStarRad,
+      minConeMc: minMc,
+    );
   }
 
   static double? solveForTargetCone(
@@ -633,7 +653,14 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   double _lowerBoundRad = 0.0;
   double _upperBoundRad = 0.0;
   double _maxConeRad = 0.0;
+  double _betaStarRad = 0.0;
+  double _minConeMc = 0.0;
   bool _limitsValid = false;
+
+  // Weak/Strong toggle — applies to θc and Mc solves. For θs input the
+  // solution is unique; the toggle auto-syncs to reflect which branch that
+  // θs falls on (θs ≥ β* → strong, else weak).
+  bool _isStrong = false;
 
   // ── Active secondary field ───────────────────────────────────────────
   _CSField _activeField = _CSField.none;
@@ -740,8 +767,11 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         }
       });
     }
-    if (_m1Valid) _recomputeLimits();
-    _recalculate();
+    // Re-validate M1 now that gamma has changed. This clears any stale
+    // "Enter a valid γ first" message on M1 (from when M1 was typed while
+    // gamma was invalid), and — if M1 is valid — recomputes the detachment
+    // limits and the chosen secondary field for the new gamma.
+    _onM1Changed(_m1Ctrl.text);
   }
 
   // ─────────────────────────────────────────────
@@ -757,8 +787,9 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         _m1Error = null;
         _limitsValid = false;
         _result = null;
+        _activeField = _CSField.none;
       });
-      _clearOutputFields();
+      _clearOutputFields(force: true);
       return;
     }
     final val = _evalExpr(trimmed);
@@ -769,7 +800,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         _limitsValid = false;
         _result = null;
       });
-      _clearOutputFields();
+      _clearOutputFields(force: true);
       return;
     }
     if (!_gammaValid) {
@@ -783,7 +814,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         _limitsValid = false;
         _result = null;
       });
-      _clearOutputFields();
+      _clearOutputFields(force: true);
       return;
     }
     _m1Value = val;
@@ -806,6 +837,8 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       _lowerBoundRad = lim.lowerBound;
       _upperBoundRad = lim.upperBound;
       _maxConeRad = lim.maxConeRad;
+      _betaStarRad = lim.betaStarRad;
+      _minConeMc = lim.minConeMc;
       _limitsValid = true;
     });
   }
@@ -846,7 +879,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     final muDeg = _machAngleRad * 180 / pi;
     if (val <= muDeg || val >= 90.0) {
       setState(() {
-        _fieldErrors[_CSField.thetaS] = 'θs must be between ${_fmt(muDeg)}° and 90°';
+        _fieldErrors[_CSField.thetaS] = 'θₛ must be between ${_fmt(muDeg)} (deg) and 90 (deg)';
         _result = null;
       });
       _clearOutputFields();
@@ -862,7 +895,10 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       _clearOutputFields();
       return;
     }
-    setState(() => _fieldErrors[_CSField.thetaS] = null);
+    setState(() {
+      _fieldErrors[_CSField.thetaS] = null;
+      _isStrong = tsRad >= _betaStarRad;
+    });
     _setResult(ConicalShockEngine.buildFullResult(tsRad, m, _m1Value, _gamma));
   }
 
@@ -900,20 +936,31 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       return;
     }
     final maxConeDeg = _maxConeRad * 180 / pi;
-    if (val <= 0 || val > maxConeDeg) {
+    if (val <= 0) {
       setState(() {
-        _fieldErrors[_CSField.thetaC] = 'θc must be between 0° and ${_fmt(maxConeDeg)}° (θcmax)';
+        _fieldErrors[_CSField.thetaC] = 'θ꜀ must be greater than 0 (deg)';
+        _result = null;
+      });
+      _clearOutputFields();
+      return;
+    }
+    if (val > maxConeDeg) {
+      setState(() {
+        _fieldErrors[_CSField.thetaC] = 'Detached shock';
         _result = null;
       });
       _clearOutputFields();
       return;
     }
     final tcRad = val * pi / 180.0;
+    final lowBranch = _isStrong ? _betaStarRad : _lowerBoundRad;
+    final highBranch = _isStrong ? _upperBoundRad : _betaStarRad;
     final ts = ConicalShockEngine.solveForTargetCone(
-        _m1Value, tcRad, _gamma, _lowerBoundRad, _upperBoundRad);
+        _m1Value, tcRad, _gamma, lowBranch, highBranch);
     if (ts == null) {
       setState(() {
-        _fieldErrors[_CSField.thetaC] = 'Detached shock';
+        _fieldErrors[_CSField.thetaC] =
+            _isStrong ? 'No strong solution exists' : 'No weak solution exists';
         _result = null;
       });
       _clearOutputFields();
@@ -973,8 +1020,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       _clearOutputFields();
       return;
     }
-    final edge = ConicalShockEngine.findConeFromShock(_upperBoundRad, _m1Value, _gamma);
-    final minPossibleMc = edge?.mc ?? 0.0;
+    final minPossibleMc = _minConeMc;
     if (val < minPossibleMc) {
       setState(() {
         _fieldErrors[_CSField.mc] = 'Mc must be at least ${_fmt(minPossibleMc)} for an attached shock';
@@ -983,11 +1029,14 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       _clearOutputFields();
       return;
     }
+    final lowBranch = _isStrong ? _betaStarRad : _lowerBoundRad;
+    final highBranch = _isStrong ? _upperBoundRad : _betaStarRad;
     final ts = ConicalShockEngine.solveForTargetMc(
-        _m1Value, val, _gamma, _lowerBoundRad, _upperBoundRad);
+        _m1Value, val, _gamma, lowBranch, highBranch);
     if (ts == null) {
       setState(() {
-        _fieldErrors[_CSField.mc] = 'No attached solution found';
+        _fieldErrors[_CSField.mc] =
+            _isStrong ? 'No strong solution exists' : 'No weak solution exists';
         _result = null;
       });
       _clearOutputFields();
@@ -1014,36 +1063,22 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     _writeComputedFields();
   }
 
-  void _recalculate() {
-    if (_activeField == _CSField.none) return;
-    switch (_activeField) {
-      case _CSField.thetaS:
-        _onThetaSChanged(_thetaSCtrl.text);
-      case _CSField.thetaC:
-        _onThetaCChanged(_thetaCCtrl.text);
-      case _CSField.mc:
-        _onMcChanged(_mcCtrl.text);
-      case _CSField.none:
-        break;
-    }
-  }
-
-  // When M1 changes and a secondary field is active, recompute
+  // When M1 (or gamma, via M1's re-validation) changes, recompute using
+  // θs's current value — θs always holds a valid number once any result
+  // exists (computed fields get written into it), regardless of whether the
+  // user originally solved via θs, θc, or Mc. This avoids needing to track
+  // which field was "the third parameter." We preserve _activeField around
+  // the call so θs isn't shown as newly selected.
   void _recalculateSecondaryField() {
-    if (_activeField == _CSField.none) {
+    final thetaSText = _thetaSCtrl.text.trim();
+    if (thetaSText.isEmpty) {
       setState(() {});
       return;
     }
-    switch (_activeField) {
-      case _CSField.thetaS:
-        _onThetaSChanged(_thetaSCtrl.text);
-      case _CSField.thetaC:
-        _onThetaCChanged(_thetaCCtrl.text);
-      case _CSField.mc:
-        _onMcChanged(_mcCtrl.text);
-      case _CSField.none:
-        break;
-    }
+    final preserved = _activeField;
+    _onThetaSChanged(thetaSText);
+    _activeField = preserved;
+    setState(() {});
   }
 
   // ─────────────────────────────────────────────
@@ -1065,11 +1100,11 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     _updating = false;
   }
 
-  void _clearOutputFields() {
+  void _clearOutputFields({bool force = false}) {
     _updating = true;
-    if (_activeField != _CSField.thetaS) _thetaSCtrl.clear();
-    if (_activeField != _CSField.thetaC) _thetaCCtrl.clear();
-    if (_activeField != _CSField.mc) _mcCtrl.clear();
+    if (force || _activeField != _CSField.thetaS) _thetaSCtrl.clear();
+    if (force || _activeField != _CSField.thetaC) _thetaCCtrl.clear();
+    if (force || _activeField != _CSField.mc) _mcCtrl.clear();
     _updating = false;
     setState(() => _result = null);
   }
@@ -1079,6 +1114,11 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       if (f != keep) _fieldErrors.remove(f);
     }
   }
+
+  // Optional fields (thetaS, thetaC, mc) only unlock once both mandatory
+  // inputs — gamma and M1 — are valid (and the detachment limits, which
+  // depend on both, have been computed).
+  bool get _mandatoryReady => _gammaValid && _m1Valid && _limitsValid;
 
   // ─────────────────────────────────────────────
   //  BUILD
@@ -1226,15 +1266,51 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     String outVal(double? v) => v != null ? _fmt(v) : '—';
 
     final p2p1Sym = _inverseRatio ? 'P₁/P₂' : 'P₂/P₁';
-    final pcp1Sym = _inverseRatio ? 'P₁/Pc' : 'Pc/P₁';
+    final pcp1Sym = _inverseRatio ? 'P₁/P꜀' : 'P꜀/P₁';
     final po2po1Sym = _inverseRatio ? 'P₀₁/P₀₂' : 'P₀₂/P₀₁';
-    final pocpo1Sym = _inverseRatio ? 'P₀₁/P₀c' : 'P₀c/P₀₁';
+    final pocpo1Sym = _inverseRatio ? 'P₀₁/P₀꜀' : 'P₀꜀/P₀₁';
     final rhoSym = _inverseRatio ? 'ρ₁/ρ₂' : 'ρ₂/ρ₁';
-    final rhocSym = _inverseRatio ? 'ρ₁/ρc' : 'ρc/ρ₁';
+    final rhocSym = _inverseRatio ? 'ρ₁/ρ꜀' : 'ρ꜀/ρ₁';
     final t2t1Sym = _inverseRatio ? 'T₁/T₂' : 'T₂/T₁';
-    final tct1Sym = _inverseRatio ? 'T₁/Tc' : 'Tc/T₁';
+    final tct1Sym = _inverseRatio ? 'T₁/T꜀' : 'T꜀/T₁';
 
     double? inv(double? v) => v == null ? null : (_inverseRatio ? 1.0 / v : v);
+
+    final weakStrongToggle = GestureDetector(
+      onTap: () {
+        setState(() => _isStrong = !_isStrong);
+        if (_activeField == _CSField.mc && _mcCtrl.text.trim().isNotEmpty) {
+          _onMcChanged(_mcCtrl.text);
+        } else {
+          // Default target is θc — covers "θc already active" as well as
+          // "nothing / θs active": the toggle takes over θc and shows it
+          // as the selected field.
+          _thetaCFocus.requestFocus();
+          if (_thetaCCtrl.text.trim().isNotEmpty) {
+            _onThetaCChanged(_thetaCCtrl.text);
+          }
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          horizontal: Responsive.pad(context, 6),
+          vertical: Responsive.pad(context, 3),
+        ),
+        decoration: BoxDecoration(
+          color: _isStrong ? _C.headerBg : const Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(Responsive.wp(context, 6)),
+        ),
+        child: Text(
+          _isStrong ? 'STRONG' : 'WEAK',
+          style: TextStyle(
+            fontSize: Responsive.sp(context, 10),
+            fontWeight: FontWeight.w600,
+            color: _isStrong ? Colors.white : _C.labelMedium,
+          ),
+        ),
+      ),
+    );
 
     final reciprocalToggle = GestureDetector(
       onTap: () => setState(() => _inverseRatio = !_inverseRatio),
@@ -1275,6 +1351,8 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       header: Row(
         children: [
           Expanded(child: _cardHeader(context, Icons.calculate_outlined, 'FLOW PROPERTIES')),
+          weakStrongToggle,
+          SizedBox(width: Responsive.wp(context, 6)),
           reciprocalToggle,
         ],
       ),
@@ -1301,9 +1379,9 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                     ),
                   ),
                   SizedBox(width: Responsive.wp(context, 3)),
-                  Text(
+                  _richSymbol(
                     'M₁',
-                    style: TextStyle(
+                    TextStyle(
                       fontSize: Responsive.sp(context, 12),
                       fontWeight: FontWeight.w700,
                       fontStyle: FontStyle.italic,
@@ -1336,14 +1414,15 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           context: context,
           field: _CSField.thetaS,
           label: 'Shock Wave Angle',
-          symbol: 'θs°',
+          symbol: 'θₛ (deg)',
           controller: _thetaSCtrl,
           focusNode: _thetaSFocus,
-          hintText: _limitsValid
-              ? 'Range: ${_fmt(_machAngleRad * 180 / pi)}° to 90°'
-              : 'Enter M₁ first',
+          hintText: _mandatoryReady
+              ? 'Range: ${_fmt(_machAngleRad * 180 / pi)} (deg) to 90 (deg)'
+              : 'Enter γ and M₁ first',
           onChanged: _onThetaSChanged,
           error: _fieldErrors[_CSField.thetaS],
+          enabled: _mandatoryReady,
         ),
 
         _divider(),
@@ -1353,14 +1432,15 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           context: context,
           field: _CSField.thetaC,
           label: 'Cone Body Angle',
-          symbol: 'θc°',
+          symbol: 'θ꜀ (deg)',
           controller: _thetaCCtrl,
           focusNode: _thetaCFocus,
-          hintText: _limitsValid
-              ? 'Range: 0° to ${_fmt(_maxConeRad * 180 / pi)}°'
-              : 'Enter M₁ first',
+          hintText: _mandatoryReady
+              ? 'Range: 0 (deg) to ${_fmt(_maxConeRad * 180 / pi)} (deg)'
+              : 'Enter γ and M₁ first',
           onChanged: _onThetaCChanged,
           error: _fieldErrors[_CSField.thetaC],
+          enabled: _mandatoryReady,
         ),
 
         _divider(),
@@ -1370,13 +1450,14 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           context: context,
           field: _CSField.mc,
           label: 'Surface Mach',
-          symbol: 'Mc',
+          symbol: 'M꜀',
           controller: _mcCtrl,
           focusNode: _mcFocus,
-          hintText: _m1Valid ? 'Lower than ${_fmt(_m1Value)}' : 'Enter M₁ first',
+          hintText: _mandatoryReady ? 'Lower than ${_fmt(_m1Value)}' : 'Enter γ and M₁ first',
           onChanged: _onMcChanged,
           error: _fieldErrors[_CSField.mc],
           isLast: true,
+          enabled: _mandatoryReady,
         ),
 
         const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),
@@ -1393,21 +1474,21 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
             children: [
               _outputRowFull(
                 context: context,
-                symbol: 'θcmax',
+                symbol: 'θ꜀ₘₐₓ',
                 label: 'Max attached cone angle',
                 value: _limitsValid ? outVal(_maxConeRad * 180 / pi) : '—',
-                unit: '°',
+                unit: ' (deg)',
               ),
 
-              SizedBox(height: Responsive.hp(context, 2)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowPair(
                 context: context,
                 sym1: 'δ (turn)',
-                val1: r != null ? '${outVal(r.delta * 180 / pi)}°' : '—',
+                val1: r != null ? '${outVal(r.delta * 180 / pi)} (deg)' : '—',
                 sym2: 'M₂ (post-shock)',
                 val2: outVal(r?.m2),
               ),
-              SizedBox(height: Responsive.hp(context, 2)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowPair(
                 context: context,
                 sym1: 'Cp (surface)',
@@ -1415,16 +1496,16 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: 'Δs/R',
                 val2: outVal(r?.dsR),
               ),
-              SizedBox(height: Responsive.hp(context, 2)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowFull(
                 context: context,
                 symbol: "V' surface",
                 label: 'Velocity ratio at cone surface',
                 value: outVal(r?.vTotalPrime),
               ),
-              SizedBox(height: Responsive.hp(context, 3)),
+              SizedBox(height: Responsive.hp(context, 6)),
               const Divider(height: 0, thickness: 0.5),
-              SizedBox(height: Responsive.hp(context, 3)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowPair(
                 context: context,
                 sym1: p2p1Sym,
@@ -1432,7 +1513,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: pcp1Sym,
                 val2: outVal(inv(r?.pcP1)),
               ),
-              SizedBox(height: Responsive.hp(context, 2)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowPair(
                 context: context,
                 sym1: po2po1Sym,
@@ -1440,7 +1521,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 sym2: pocpo1Sym,
                 val2: outVal(inv(r?.po2po1)),
               ),
-              SizedBox(height: Responsive.hp(context, 2)),
+              SizedBox(height: Responsive.hp(context, 6)),
               _outputRowPair(
                 context: context,
                 sym1: rhoSym,
@@ -1477,6 +1558,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     required ValueChanged<String> onChanged,
     String? error,
     bool isLast = false,
+    bool enabled = true,
   }) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -1494,15 +1576,15 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
                 label,
                 style: TextStyle(
                   fontSize: Responsive.sp(context, 12),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: _C.fieldLabel,
                 ),
               ),
               SizedBox(width: Responsive.wp(context, 3)),
-              Text(
+              _richSymbol(
                 symbol,
-                style: TextStyle(
-                  fontSize: Responsive.sp(context, 12),
+                TextStyle(
+                  fontSize: Responsive.sp(context, 12.5),
                   fontWeight: FontWeight.w700,
                   fontStyle: FontStyle.italic,
                   color: _C.fieldLabel,
@@ -1518,6 +1600,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
             hintText: hintText,
             onChanged: onChanged,
             hasError: error != null,
+            enabled: enabled,
           ),
           if (error != null) ...[
             SizedBox(height: Responsive.hp(context, 2)),
@@ -1537,8 +1620,8 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
   }) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: Responsive.pad(context, 8),
-        vertical: Responsive.pad(context, 4),
+        horizontal: Responsive.pad(context, 10),
+        vertical: Responsive.pad(context, 8),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
@@ -1548,20 +1631,20 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
+          _richSymbol(
             symbol,
-            style: TextStyle(
-              fontSize: Responsive.sp(context, 11),
+            TextStyle(
+              fontSize: Responsive.sp(context, 14.0),
               fontWeight: FontWeight.w700,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
             ),
           ),
-          Text(
+          SelectableText(
             '$value$unit',
             style: TextStyle(
               fontSize: Responsive.sp(context, 12),
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: _C.outputValue,
             ),
           ),
@@ -1589,11 +1672,29 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     );
   }
 
+  // Renders a symbol string, keeping subscript unicode chars (₀₁₂꜀ etc.)
+  // bigger while staying lowered/subscript (not inline with main glyphs).
+  static const _subscriptChars = '₀₁₂₃₄₅₆₇₈₉꜀';
+
+  Widget _richSymbol(String symbol, TextStyle baseStyle, {double subScale = 1.35}) {
+    final spans = <TextSpan>[];
+    for (final ch in symbol.split('')) {
+      final isSub = _subscriptChars.contains(ch);
+      spans.add(TextSpan(
+        text: ch,
+        style: isSub
+            ? baseStyle.copyWith(fontSize: (baseStyle.fontSize ?? 14) * subScale)
+            : baseStyle,
+      ));
+    }
+    return Text.rich(TextSpan(children: spans));
+  }
+
   Widget _outputCell(BuildContext context, String symbol, String value) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: Responsive.pad(context, 6),
-        vertical: Responsive.pad(context, 3),
+        horizontal: Responsive.pad(context, 10),
+        vertical: Responsive.pad(context, 6),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
@@ -1603,24 +1704,23 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          _richSymbol(
             symbol,
-            style: TextStyle(
-              fontSize: Responsive.sp(context, 9),
+            TextStyle(
+              fontSize: Responsive.sp(context, 13.5),
               fontWeight: FontWeight.w600,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
             ),
           ),
-          SizedBox(height: Responsive.hp(context, 1)),
-          Text(
+          SizedBox(height: Responsive.hp(context, 2)),
+          SelectableText(
             value,
             style: TextStyle(
               fontSize: Responsive.sp(context, 12),
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: _C.outputValue,
             ),
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -1660,6 +1760,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
     required String hintText,
     required ValueChanged<String> onChanged,
     bool hasError = false,
+    bool enabled = true,
   }) {
     return ListenableBuilder(
       listenable: focusNode,
@@ -1667,7 +1768,10 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         final focused = focusNode.hasFocus;
         Color borderColor;
         Color bgColor;
-        if (hasError) {
+        if (!enabled) {
+          borderColor = _C.fieldBorder.withValues(alpha: 0.4);
+          bgColor = _C.fieldBg.withValues(alpha: 0.6);
+        } else if (hasError) {
           borderColor = _C.errorText;
           bgColor = const Color(0xFFFFF5F5);
         } else if (focused) {
@@ -1688,6 +1792,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
           child: TextField(
             controller: controller,
             focusNode: focusNode,
+            enabled: enabled,
             onChanged: onChanged,
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),
@@ -1776,6 +1881,7 @@ class _ConicalShockScreenState extends State<ConicalShockScreen> {
         MapEntry('δ — Flow deflection', 'Flow turn angle immediately behind the shock (from the oblique-shock relation), before the flow further turns isentropically to the cone surface.'),
         MapEntry('Cp', 'Surface pressure coefficient, (pc/p∞ − 1) · 2/(γM₁²).'),
         MapEntry('Δs/R', 'Non-dimensional entropy rise across the shock, −ln(p₀c/p₀∞).'),
+        MapEntry('Weak / Strong', 'For a given θc (or Mc), two attached solutions can exist: weak (θs ≤ β*, the physically common case) and strong (θs ≥ β*, subsonic-behind-shock). β* is the shock angle at the max attachable cone angle. Toggle to switch; θs input auto-syncs to whichever branch it falls on.'),
         MapEntry('Reciprocal', 'Flips all ratio outputs to their reciprocals (e.g. T₂/T₁ ↔ T₁/T₂).'),
       ],
     );

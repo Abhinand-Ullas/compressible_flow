@@ -344,6 +344,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
   final Map<_OSField, String?> _fieldErrors = {};
   String _selectedGasName = 'Air';
   bool _updating = false;
+  // While true, _writeComputedFields must not touch the M1 field's text —
+  // used while recomputing via theta as a side effect of editing M1 itself,
+  // so we don't fight the user's in-progress keystrokes.
+  bool _suppressM1Overwrite = false;
 
   // Weak/Strong toggle
   bool _isStrong = false;
@@ -538,7 +542,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     }
     if (val <= 0.0 || val >= 90.0) {
       setState(() {
-        _fieldErrors[_OSField.theta] = 'θ must be between 0° and 90°';
+        _fieldErrors[_OSField.theta] = 'θ must be between 0 (deg) and 90 (deg)';
         _result = null;
       });
       _clearOutputFields();
@@ -548,7 +552,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     if (thetaRad > _thetaMaxRad) {
       setState(() {
         _fieldErrors[_OSField.theta] =
-            'Detached shock (θ > θmax = ${_fmt(_thetaMaxRad * 180.0 / pi)}°)';
+            'Detached shock (θ > θₘₐₓ = ${_fmt(_thetaMaxRad * 180.0 / pi)} (deg))';
         _result = null;
       });
       _clearOutputFields();
@@ -602,10 +606,9 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
       return;
     }
     final betaRad = val * pi / 180.0;
-    final muDeg = _machAngle * 180.0 / pi;
     if (betaRad >= pi / 2.0) {
       setState(() {
-        _fieldErrors[_OSField.beta] = 'β must be less than 90°';
+        _fieldErrors[_OSField.beta] = 'Detached shock';
         _result = null;
       });
       _clearOutputFields();
@@ -613,8 +616,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     }
     if (betaRad <= _machAngle) {
       setState(() {
-        _fieldErrors[_OSField.beta] =
-            'β must be greater than Mach angle (${_fmt(muDeg)}°)';
+        _fieldErrors[_OSField.beta] = 'Detached shock';
         _result = null;
       });
       _clearOutputFields();
@@ -699,22 +701,24 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     }
   }
 
-  // When M1 changes and another secondary field is active, recompute
+  // When M1 changes, recompute using theta's current value — theta always
+  // holds a valid number once any result exists (computed fields get written
+  // into it), regardless of whether the user originally solved via theta,
+  // beta, or m1n. This avoids needing to track which field was "the third
+  // parameter." We preserve _activeField around the call so M1 stays shown
+  // as the active field (theta isn't shown as newly selected).
   void _recalculateSecondaryField() {
-    if (_activeField == _OSField.none || _activeField == _OSField.m1) {
+    final thetaText = _thetaCtrl.text.trim();
+    if (thetaText.isEmpty) {
       setState(() {});
       return;
     }
-    switch (_activeField) {
-      case _OSField.theta:
-        _onThetaChanged(_thetaCtrl.text);
-      case _OSField.beta:
-        _onBetaChanged(_betaCtrl.text);
-      case _OSField.m1n:
-        _onM1nChanged(_m1nCtrl.text);
-      default:
-        break;
-    }
+    final preserved = _activeField;
+    _suppressM1Overwrite = true;
+    _onThetaChanged(thetaText);
+    _suppressM1Overwrite = false;
+    _activeField = preserved;
+    setState(() {});
   }
 
   // ─────────────────────────────────────────────
@@ -726,6 +730,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     final r = _result!;
 
     void setIfNotActive(_OSField field, TextEditingController ctrl, String Function() value) {
+      if (field == _OSField.m1 && _suppressM1Overwrite) return;
       if (_activeField != field) ctrl.text = value();
     }
 
@@ -752,6 +757,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
       if (f != keep) _fieldErrors.remove(f);
     }
   }
+
+  // Optional fields (theta, beta, m1n) only unlock once both mandatory
+  // inputs — gamma and M1 — are valid.
+  bool get _mandatoryReady => _gammaValid && _m1Valid;
 
   // ─────────────────────────────────────────────
   //  HandyCalc dialog
@@ -1030,14 +1039,15 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           context: context,
           field: _OSField.theta,
           label: 'Turn / Deflection angle',
-          symbol: 'θ°',
+          symbol: 'θ (deg)',
           controller: _thetaCtrl,
           focusNode: _thetaFocus,
-          hintText: _m1Valid
-              ? 'Between 0° and ${_fmt(_thetaMaxRad * 180.0 / pi)}°'
-              : 'Enter M₁ first',
+          hintText: _mandatoryReady
+              ? 'Between 0 (deg) and ${_fmt(_thetaMaxRad * 180.0 / pi)} (deg)'
+              : 'Enter γ and M₁ first',
           onChanged: _onThetaChanged,
           error: _fieldErrors[_OSField.theta],
+          enabled: _mandatoryReady,
         ),
 
         _divider(),
@@ -1047,14 +1057,15 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           context: context,
           field: _OSField.beta,
           label: 'Shock angle',
-          symbol: 'β°',
+          symbol: 'β (deg)',
           controller: _betaCtrl,
           focusNode: _betaFocus,
-          hintText: _m1Valid
-              ? 'Between ${_fmt(_machAngle * 180.0 / pi)}° and 90°'
-              : 'Enter M₁ first',
+          hintText: _mandatoryReady
+              ? 'Between ${_fmt(_machAngle * 180.0 / pi)} (deg) and 90 (deg)'
+              : 'Enter γ and M₁ first',
           onChanged: _onBetaChanged,
           error: _fieldErrors[_OSField.beta],
+          enabled: _mandatoryReady,
         ),
 
         _divider(),
@@ -1067,10 +1078,13 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           symbol: 'M₁ₙ',
           controller: _m1nCtrl,
           focusNode: _m1nFocus,
-          hintText: _m1Valid ? 'Between 1 and M₁ (${_fmt(_m1Value)})' : 'Enter M₁ first',
+          hintText: _mandatoryReady
+              ? 'Between 1 and M₁ (${_fmt(_m1Value)})'
+              : 'Enter γ and M₁ first',
           onChanged: _onM1nChanged,
           error: _fieldErrors[_OSField.m1n],
           isLast: false,
+          enabled: _mandatoryReady,
         ),
 
         const Divider(height: 0, thickness: 0.5, color: _C.sectionDiv),
@@ -1079,22 +1093,22 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(
             Responsive.pad(context, 12),
-            Responsive.pad(context, 5),
+            Responsive.pad(context, 8),
             Responsive.pad(context, 12),
-            Responsive.pad(context, 5),
+            Responsive.pad(context, 8),
           ),
           child: Column(
             children: [
               // Row: θmax (always shown)
               _outputRowFull(
                 context: context,
-                symbol: 'θmax',
+                symbol: 'θₘₐₓ',
                 label: 'Max turn angle',
                 value: _m1Valid ? outVal(_thetaMaxRad * 180.0 / pi) : '—',
-                unit: '°',
+                unit: ' (deg)',
               ),
 
-              SizedBox(height: Responsive.hp(context, 4)),
+              SizedBox(height: Responsive.hp(context, 8)),
 
               // Row: M₂ | M₂ₙ
               _outputRowPair(
@@ -1105,7 +1119,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 val2: outVal(r?.m2n),
               ),
 
-              SizedBox(height: Responsive.hp(context, 4)),
+              SizedBox(height: Responsive.hp(context, 8)),
 
               // Row: T₂/T₁ | P₂/P₁
               _outputRowPairWithHandy(
@@ -1142,7 +1156,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                     : null,
               ),
 
-              SizedBox(height: Responsive.hp(context, 4)),
+              SizedBox(height: Responsive.hp(context, 8)),
 
               // Row: ρ₂/ρ₁ | P₀₂/P₀₁
               _outputRowPairWithHandy(
@@ -1212,17 +1226,17 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           Text(
             symbol,
             style: TextStyle(
-              fontSize: Responsive.sp(context, 12),
+              fontSize: Responsive.sp(context, 14),
               fontWeight: FontWeight.w700,
               fontStyle: FontStyle.italic,
               color: _C.sectionLabel,
             ),
           ),
-          Text(
+          SelectableText(
             '$value$unit',
             style: TextStyle(
-              fontSize: Responsive.sp(context, 13),
-              fontWeight: FontWeight.w600,
+              fontSize: Responsive.sp(context, 12),
+              fontWeight: FontWeight.w500,
               color: _C.outputValue,
             ),
           ),
@@ -1268,10 +1282,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
   Widget _outputCell(BuildContext context, String symbol, String value, {VoidCallback? onHandy}) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-        Responsive.pad(context, 10),
-        Responsive.pad(context, 6),
-        Responsive.pad(context, onHandy != null ? 2 : 10),
-        Responsive.pad(context, 6),
+        Responsive.pad(context, 12),
+        Responsive.pad(context, 8),
+        Responsive.pad(context, onHandy != null ? 4 : 12),
+        Responsive.pad(context, 8),
       ),
       decoration: BoxDecoration(
         color: _C.outputReadonlyBg,
@@ -1287,21 +1301,20 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 Text(
                   symbol,
                   style: TextStyle(
-                    fontSize: Responsive.sp(context, 10),
+                    fontSize: Responsive.sp(context, 12),
                     fontWeight: FontWeight.w600,
                     fontStyle: FontStyle.italic,
                     color: _C.sectionLabel,
                   ),
                 ),
-                SizedBox(height: Responsive.hp(context, 1)),
-                Text(
+                SizedBox(height: Responsive.hp(context, 2)),
+                SelectableText(
                   value,
                   style: TextStyle(
-                    fontSize: Responsive.sp(context, 12),
+                    fontSize: Responsive.sp(context, 15),
                     fontWeight: FontWeight.w600,
                     color: _C.outputValue,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1368,6 +1381,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     required ValueChanged<String> onChanged,
     String? error,
     bool isLast = false,
+    bool enabled = true,
   }) {
     final isActive = _activeField == field;
     final isComputed =
@@ -1389,7 +1403,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
                 label,
                 style: TextStyle(
                   fontSize: Responsive.sp(context, 13),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: _C.fieldLabel,
                 ),
               ),
@@ -1415,6 +1429,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
             hasError: error != null,
             isComputed: isComputed,
             isActive: isActive,
+            enabled: enabled,
           ),
           if (error != null) ...[
             SizedBox(height: Responsive.hp(context, 4)),
@@ -1435,6 +1450,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
     bool hasError = false,
     bool isComputed = false,
     bool isActive = false,
+    bool enabled = true,
     VoidCallback? onHandyCalc,
   }) {
     return ListenableBuilder(
@@ -1443,7 +1459,10 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
         final focused = focusNode.hasFocus;
         Color borderColor;
         Color bgColor;
-        if (hasError) {
+        if (!enabled) {
+          borderColor = _C.fieldBorder.withValues(alpha: 0.4);
+          bgColor = _C.computedBg.withValues(alpha: 0.6);
+        } else if (hasError) {
           borderColor = _C.errorText;
           bgColor = const Color(0xFFFFF5F5);
         } else if (focused || isActive) {
@@ -1489,6 +1508,7 @@ class _ObliqueShockScreenState extends State<ObliqueShockScreen> {
           child: TextField(
             controller: controller,
             focusNode: focusNode,
+            enabled: enabled,
             onChanged: onChanged,
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-*/^() ×÷]')),

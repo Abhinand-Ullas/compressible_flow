@@ -293,7 +293,7 @@ class _DrawerItem extends StatelessWidget {
 void main() {
   runApp(
     DevicePreview(
-      enabled: false,
+      enabled: true,
       builder: (context) => const _App(),
     ),
   );

@@ -722,7 +722,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     }
     if (val <= 0.0) {
       setState(() {
-        _fieldErrors[_ActiveField.fricFact] = '4fL*/D must be > 0';
+        _fieldErrors[_ActiveField.fricFact] = 'fL*/D must be > 0';
         _result = null;
       });
       _clearComputedFields(_ActiveField.fricFact);
@@ -736,7 +736,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     final maxFric = FannoFlowEngine.calculateFricFactSupMax(_gamma);
     if (_isFricSupersonic && val >= maxFric) {
       setState(() {
-        _fieldErrors[_ActiveField.fricFact] = '4fL*/D must be between 0 and ${_fmt(maxFric)} for supersonic';
+        _fieldErrors[_ActiveField.fricFact] = 'fL*/D must be between 0 and ${_fmt(maxFric)} for supersonic';
         _result = null;
       });
       _clearComputedFields(_ActiveField.fricFact);
@@ -1310,7 +1310,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
 
         _divider(),
 
-        // ── 4fL*/D ─────────────────────────────────────────────────────────
+        // ── fL*/D ─────────────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.fricFact,
@@ -1321,6 +1321,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
           hintText: 'Must be > 0',
           onChanged: _onFricFactChanged,
           error: _fieldErrors[_ActiveField.fricFact],
+          noteText: 'Note: Darcy friction factor = f, Fanning friction factor (cf) = f/4',
           trailing: _SupersonicToggle(
             context: context,
             isSupersonic: _isFricSupersonic,
@@ -1400,6 +1401,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
     VoidCallback? onHandyCalc,
     Widget? trailing,
     bool isLast = false,
+    String? noteText,
   }) {
     final isActive = _activeField == field;
     final isComputed = _activeField != _ActiveField.none && !isActive && _result != null;
@@ -1425,7 +1427,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
                         label,
                         style: TextStyle(
                           fontSize: Responsive.sp(context, 12),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           color: _C.fieldLabel,
                         ),
                       ),
@@ -1445,6 +1447,30 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
                 if (trailing != null) trailing,
               ],
             ),
+            if (noteText != null)
+              SizedBox(height: Responsive.hp(context, 2)),
+            if (noteText != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: Responsive.sp(context, 12),
+                    color: _C.headerBg,
+                  ),
+                  SizedBox(width: Responsive.wp(context, 4)),
+                  Expanded(
+                    child: Text(
+                      noteText,
+                      style: TextStyle(
+                        fontSize: Responsive.sp(context, 10.5),
+                        fontWeight: FontWeight.w500,
+                        color: const Color.fromARGB(255, 64, 77, 102),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             SizedBox(height: Responsive.hp(context, 2)),
             _buildInputField(
               context: context,
@@ -1620,7 +1646,7 @@ class _FannoFlowScreenState extends State<FannoFlowScreen> {
         const MapEntry('Sonic Reference State', 'Superscript \'*\' refers to the sonic state where local Mach number = 1.0.'),
         const MapEntry('Stagnation Reference State', 'Subscript \'0\' refers to the local stagnation or total state condition.'),
         const MapEntry('Core Assumptions', 'Assumes steady, one-dimensional, adiabatic flow with constant friction in a constant area duct.'),
-        const MapEntry('Friction Limits', 'For supersonic flows, the friction parameter 4fL*/D is bounded by a maximum limit corresponding to M → ∞.'),
+        const MapEntry('Friction Limits', 'For supersonic flows, the friction parameter fL*/D is bounded by a maximum limit corresponding to M → ∞.'),
       ],
     );
   }

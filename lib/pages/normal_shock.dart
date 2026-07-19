@@ -1149,7 +1149,24 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
     final p2p1Hint   = _inverseRatio ? 'Between 0 and 1' : 'Greater than 1';
     final rhoHint    = _inverseRatio ? 'Between 1/((γ+1)/(γ−1)) and 1' : 'Between 1 and (γ+1)/(γ−1)';
     final p02p01Hint = _inverseRatio ? 'Greater than 1'  : 'Between 0 and 1';
-    final p02p1Hint  = _inverseRatio ? 'Between 0 and 1/(p02p1min)' : 'Greater than p02p1min';
+    final String m2Hint;
+    if (_gammaValid) {
+      final minM2 = NormalShockEngine.m2min(_gamma);
+      m2Hint = 'Between ${_fmt(minM2)} and 1';
+    } else {
+      m2Hint = 'Between M₂min and 1';
+    }
+    final String p02p1Hint;
+    if (_gammaValid) {
+      final minVal = NormalShockEngine.p02p1min(_gamma);
+      p02p1Hint = _inverseRatio
+          ? 'Between 0 and ${_fmt(1.0 / minVal)}'
+          : 'Greater than ${_fmt(minVal)}';
+    } else {
+      p02p1Hint = _inverseRatio
+          ? 'Between 0 and 1/(p02p1min)'
+          : 'Greater than p02p1min';
+    }
 
     return _Card(
       context: context,
@@ -1257,7 +1274,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
           symbol: 'M₂',
           controller: _m2Ctrl,
           focusNode: _m2Focus,
-          hintText: 'Between M₂min and 1',
+          hintText: m2Hint,
           onChanged: _onM2Changed,
           error: _fieldErrors[_NSField.m2],
         ),
@@ -1517,7 +1534,7 @@ class _NormalShockScreenState extends State<NormalShockScreen> {
                       label,
                       style: TextStyle(
                         fontSize: Responsive.sp(context, 13),
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                         color: _C.fieldLabel,
                       ),
                     ),

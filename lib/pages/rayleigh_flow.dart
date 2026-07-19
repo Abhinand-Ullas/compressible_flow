@@ -1350,7 +1350,7 @@ class _RayleighFlowScreenState extends State<RayleighFlowScreen> {
                         label,
                         style: TextStyle(
                           fontSize: Responsive.sp(context, 12),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           color: _C.fieldLabel,
                         ),
                       ),

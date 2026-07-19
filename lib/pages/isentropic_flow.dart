@@ -76,7 +76,7 @@ const List<_GasEntry> _kGases = [
 // ─────────────────────────────────────────────
 //  Enum: which field the user is currently typing in
 // ─────────────────────────────────────────────
-enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, aRatio, mu, nu }
+enum _ActiveField { none, mach, tRatio, pRatio, rhoRatio, aRatio, paRatio, mu, nu }
 
 // ─────────────────────────────────────────────
 //  Simple arithmetic expression evaluator
@@ -183,12 +183,16 @@ class IsentropicEngine {
         (1.0 / M) *
         pow(X / ((g + 1.0) / 2.0), (g + 1.0) / (2.0 * (g - 1.0))).toDouble();
 
+    // PA/P₀A*  =  (P/P₀) · (A/A*)  — direct product of the two ratios above
+    final paRatio = pRatio * aRatio;
+
     final result = {
       'M': M,
       'tRatio': tRatio,
       'pRatio': pRatio,
       'rhoRatio': rhoRatio,
       'aRatio': aRatio,
+      'paRatio': paRatio,
     };
 
     // Mach angle and Prandtl-Meyer only for supersonic
@@ -274,6 +278,30 @@ class IsentropicEngine {
     return temp1 * (temp2 - temp3) / (m * m);
   }
 
+  // ── Case 5b: PA/P₀A* → M (closed-form, single-valued — always monotonic) ──
+  //
+  // R = (P/P₀)·(A/A*) collapses to R = C / [ M·√(1+aM²) ], where
+  //   a = (γ-1)/2,  n = (γ+1)/(2(γ-1)),  C = (2/(γ+1))^n.
+  // Squaring gives a quadratic in x = M²:  aR²x² + R²x − C² = 0.
+  // Unlike A/A*, this parameter is strictly decreasing in M (no turning
+  // point), so exactly one physically valid (positive) root exists — no
+  // subsonic/supersonic toggle is needed.
+  static double machFromPARatio(double paRatio, double gamma) {
+    final g = gamma;
+    final a = 0.5 * (g - 1.0);
+    final n = (g + 1.0) / (2.0 * (g - 1.0));
+    final C = pow(2.0 / (g + 1.0), n).toDouble();
+    final R = paRatio;
+
+    final Aq = a * R * R;
+    final Bq = R * R;
+    final Cq = -(C * C);
+
+    final disc = Bq * Bq - 4.0 * Aq * Cq;
+    final x = (-Bq + sqrt(disc)) / (2.0 * Aq);
+    return sqrt(x);
+  }
+
   // ── Case 6: μ → M ────────────────────────────────────────────────────────
   static double machFromMu(double muDeg) {
     return 1.0 / sin(radians(muDeg));
@@ -328,6 +356,7 @@ class IsentropicResult {
   final double pRatio;
   final double rhoRatio;
   final double aRatio;
+  final double paRatio;
   final double? mu; // null if subsonic
   final double? nu; // null if subsonic
 
@@ -337,6 +366,7 @@ class IsentropicResult {
     required this.pRatio,
     required this.rhoRatio,
     required this.aRatio,
+    required this.paRatio,
     this.mu,
     this.nu,
   });
@@ -361,6 +391,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   final _pRatioCtrl = TextEditingController();
   final _rhoRatioCtrl = TextEditingController();
   final _aRatioCtrl = TextEditingController();
+  final _paRatioCtrl = TextEditingController();
   final _muCtrl = TextEditingController();
   final _nuCtrl = TextEditingController();
 
@@ -371,6 +402,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
   final _pRatioFocus = FocusNode();
   final _rhoRatioFocus = FocusNode();
   final _aRatioFocus = FocusNode();
+  final _paRatioFocus = FocusNode();
   final _muFocus = FocusNode();
   final _nuFocus = FocusNode();
 
@@ -423,6 +455,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     onFocusChange(_ActiveField.pRatio, _pRatioFocus);
     onFocusChange(_ActiveField.rhoRatio, _rhoRatioFocus);
     onFocusChange(_ActiveField.aRatio, _aRatioFocus);
+    onFocusChange(_ActiveField.paRatio, _paRatioFocus);
     onFocusChange(_ActiveField.mu, _muFocus);
     onFocusChange(_ActiveField.nu, _nuFocus);
   }
@@ -436,6 +469,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       _pRatioCtrl,
       _rhoRatioCtrl,
       _aRatioCtrl,
+      _paRatioCtrl,
       _muCtrl,
       _nuCtrl,
     ]) {
@@ -448,6 +482,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       _pRatioFocus,
       _rhoRatioFocus,
       _aRatioFocus,
+      _paRatioFocus,
       _muFocus,
       _nuFocus,
     ]) {
@@ -783,6 +818,61 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _computeFromMach(M);
   }
 
+  void _onPARatioChanged(String raw) {
+    if (_updating) return;
+    _activeField = _ActiveField.paRatio;
+    _clearOtherErrors(_ActiveField.paRatio);
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _fieldErrors[_ActiveField.paRatio] = null;
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.paRatio);
+      return;
+    }
+
+    final rawVal = _evalExpr(trimmed);
+    if (rawVal == null) {
+      setState(() {
+        _fieldErrors[_ActiveField.paRatio] = 'Invalid expression';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.paRatio);
+      return;
+    }
+
+    // Domain is (0, ∞) on both sides — the entered value must be positive
+    // regardless of whether it represents PA/P₀A* or its reciprocal.
+    if (rawVal <= 0.0) {
+      setState(() {
+        _fieldErrors[_ActiveField.paRatio] = _inverseRatio
+            ? 'P₀A*/PA must be greater than 0'
+            : 'PA/P₀A* must be greater than 0';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.paRatio);
+      return;
+    }
+
+    // If inverse (P₀A*/PA), convert to PA/P₀A* = 1/input
+    final val = _inverseRatio ? 1.0 / rawVal : rawVal;
+
+    if (!_gammaValid) {
+      setState(() {
+        _fieldErrors[_ActiveField.paRatio] = 'Enter a valid γ first';
+        _result = null;
+      });
+      _clearComputedFields(_ActiveField.paRatio);
+      return;
+    }
+
+    setState(() => _fieldErrors[_ActiveField.paRatio] = null);
+    final M = IsentropicEngine.machFromPARatio(val, _gamma);
+    _computeFromMach(M);
+  }
+
   void _onMuChanged(String raw) {
     if (_updating) return;
     _activeField = _ActiveField.mu;
@@ -811,7 +901,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     if (val <= 0.0 || val >= 90.0) {
       setState(() {
         _fieldErrors[_ActiveField.mu] =
-            'Mach angle μ must be between 0° and 90°';
+            'Mach angle μ must be between 0 (deg) and 90 (deg)';
         _result = null;
       });
       _clearComputedFields(_ActiveField.mu);
@@ -861,7 +951,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     if (val < 0.0 || val > maxNu) {
       setState(() {
         _fieldErrors[_ActiveField.nu] =
-            'ν must be between 0° and ${_fmt(maxNu)}°';
+            'ν must be between 0 (deg) and ${_fmt(maxNu)} (deg)';
         _result = null;
       });
       _clearComputedFields(_ActiveField.nu);
@@ -893,6 +983,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
       pRatio: data['pRatio']!,
       rhoRatio: data['rhoRatio']!,
       aRatio: data['aRatio']!,
+      paRatio: data['paRatio']!,
       mu: data['mu'],
       nu: data['nu'],
     );
@@ -921,6 +1012,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         _onRhoRatioChanged(_rhoRatioCtrl.text);
       case _ActiveField.aRatio:
         _onARatioChanged(_aRatioCtrl.text);
+      case _ActiveField.paRatio:
+        _onPARatioChanged(_paRatioCtrl.text);
       case _ActiveField.mu:
         _onMuChanged(_muCtrl.text);
       case _ActiveField.nu:
@@ -958,6 +1051,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
         () => _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio));
     setIfNotActive(_ActiveField.aRatio, _aRatioCtrl,
         () => _inverseRatio ? _fmt(1.0 / r.aRatio) : _fmt(r.aRatio));
+    setIfNotActive(_ActiveField.paRatio, _paRatioCtrl,
+        () => _inverseRatio ? _fmt(1.0 / r.paRatio) : _fmt(r.paRatio));
 
     if (_activeField != _ActiveField.mu) {
       _muCtrl.text = r.mu != null ? _fmt(r.mu!) : '—';
@@ -983,6 +1078,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     clearIfNotActive(_ActiveField.pRatio, _pRatioCtrl);
     clearIfNotActive(_ActiveField.rhoRatio, _rhoRatioCtrl);
     clearIfNotActive(_ActiveField.aRatio, _aRatioCtrl);
+    clearIfNotActive(_ActiveField.paRatio, _paRatioCtrl);
     if (keepField != _ActiveField.mu) _muCtrl.clear();
     if (keepField != _ActiveField.nu) _nuCtrl.clear();
     _updating = false;
@@ -1068,6 +1164,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     _pRatioCtrl.clear();
     _rhoRatioCtrl.clear();
     _aRatioCtrl.clear();
+    _paRatioCtrl.clear();
     _muCtrl.clear();
     _nuCtrl.clear();
     _updating = false;
@@ -1247,11 +1344,13 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
     final pSym    = _inverseRatio ? 'P₀/P'  : 'P/P₀';
     final rhoSym  = _inverseRatio ? 'ρ₀/ρ'  : 'ρ/ρ₀';
     final aSym    = _inverseRatio ? 'A*/A'  : 'A/A*';
+    final paSym   = _inverseRatio ? 'P₀A*/PA' : 'PA/P₀A*';
 
     final tHint   = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
     final pHint   = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
     final rhoHint = _inverseRatio ? 'Greater than 1' : 'Between 0 and 1';
     final aHint   = _inverseRatio ? 'Between 0 and 1' : '≥ 1';
+    final paHint  = 'Must be greater than 0';
 
     return _Card(
       context: context,
@@ -1277,6 +1376,8 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                     _rhoRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.rhoRatio) : _fmt(r.rhoRatio);
                   case _ActiveField.aRatio:
                     _aRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.aRatio) : _fmt(r.aRatio);
+                  case _ActiveField.paRatio:
+                    _paRatioCtrl.text = _inverseRatio ? _fmt(1.0 / r.paRatio) : _fmt(r.paRatio);
                   default:
                     break;
                 }
@@ -1289,6 +1390,7 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
                   case _ActiveField.pRatio: ctrl = _pRatioCtrl; onChanged = _onPRatioChanged; break;
                   case _ActiveField.rhoRatio: ctrl = _rhoRatioCtrl; onChanged = _onRhoRatioChanged; break;
                   case _ActiveField.aRatio: ctrl = _aRatioCtrl; onChanged = _onARatioChanged; break;
+                  case _ActiveField.paRatio: ctrl = _paRatioCtrl; onChanged = _onPARatioChanged; break;
                   default: break;
                 }
                 if (ctrl != null && onChanged != null) {
@@ -1459,15 +1561,32 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
 
         _divider(),
 
+        // ── PA/P₀A* (or P₀A*/PA) — Pressure–Area Ratio ─────────────────────
+        // Always single-valued (strictly decreasing in M), so no
+        // subsonic/supersonic toggle is needed here.
+        _flowField(
+          context: context,
+          field: _ActiveField.paRatio,
+          label: 'Pressure–Area Ratio',
+          symbol: paSym,
+          controller: _paRatioCtrl,
+          focusNode: _paRatioFocus,
+          hintText: paHint,
+          onChanged: _onPARatioChanged,
+          error: _fieldErrors[_ActiveField.paRatio],
+        ),
+
+        _divider(),
+
         // ── Mach angle μ ──────────────────────────────────────────────────
         _flowField(
           context: context,
           field: _ActiveField.mu,
           label: 'Mach Angle',
-          symbol: 'μ  (°)',
+          symbol: 'μ  (deg)',
           controller: _muCtrl,
           focusNode: _muFocus,
-          hintText: 'Supersonic only — 0° to 90°',
+          hintText: 'Supersonic only — 0 (deg) to 90 (deg)',
           onChanged: _onMuChanged,
           error: _fieldErrors[_ActiveField.mu],
         ),
@@ -1479,10 +1598,10 @@ class _IsentropicFlowScreenState extends State<IsentropicFlowScreen> {
           context: context,
           field: _ActiveField.nu,
           label: 'Prandtl-Meyer Angle',
-          symbol: 'ν  (°)',
+          symbol: 'ν  (deg)',
           controller: _nuCtrl,
           focusNode: _nuFocus,
-          hintText: 'Supersonic only — max ${_fmt(IsentropicEngine.nuMax(_gamma))}°',
+          hintText: 'Supersonic only — max ${_fmt(IsentropicEngine.nuMax(_gamma))} (deg)',
           onChanged: _onNuChanged,
           error: _fieldErrors[_ActiveField.nu],
           isLast: true,
